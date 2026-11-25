@@ -1,0 +1,6 @@
+# Solo se usa si el hosting no permite apuntar el subdominio a la carpeta "public".
+# Redirige todo a public/ y protege config.php y app/.
+RewriteEngine On
+RewriteRule ^(config\.php|config\.sample\.php|cron\.php|app/.*|README\.md|\.git.*)$ - [F,L]
+RewriteCond %{REQUEST_URI} !^/public/
+RewriteRule ^(.*)$ public/$1 [L]

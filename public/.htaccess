@@ -1,0 +1,13 @@
+Options -Indexes
+RewriteEngine On
+
+# Archivos reales (app.css, app.js, iconos) se sirven directamente; el resto va a index.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^ index.php [L,QSA]
+
+<IfModule mod_headers.c>
+  Header always unset X-Frame-Options
+  <FilesMatch "\.(js|css|svg)$">
+    Header set Cache-Control "public, max-age=3600"
+  </FilesMatch>
+</IfModule>

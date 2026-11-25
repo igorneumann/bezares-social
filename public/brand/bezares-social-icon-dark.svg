@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-labelledby="t-dark">
+  <title id="t-dark">Bezares Social MKT</title>
+  <!-- Versión para fondos oscuros (blanco). Megáfono con el anagrama BZ de Bezares recortado. Lienzo cuadrado de 32 × 32 px, un solo color, fondo transparente. -->
+  <defs>
+    <mask id="bz-dark" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+      <rect width="256" height="256" fill="#fff"/>
+      <g fill="#000" transform="translate(68.04 96.46) scale(0.38)">
+        <polygon points="31.99,97.77 47.8,70.23 15.95,70.17 0,97.74"/>
+        <path d="M170.13,97.87h16.96l-31.79,55.24h128.16l-16.13-27.56h-64.03l32.07-55.62l-65.11,0.12c0,0-4.21,10.27-7.68,13.86C165.93,87.51,170.13,97.87,170.13,97.87"/>
+        <path d="M98.83,42.27h2.81h25.73c5.28,0,14.3,4.39,14.3,13.96c0,7.3-6.61,13.96-15.04,13.96H82.36L98.83,42.27z M127.56,153.69c9.54,0,41.62-9.62,41.62-41.86c0-11.46-4.45-22.18-10.56-27.96c7.68-10.2,10.81-19.72,10.81-28.28c0-24.94-25.58-42.32-40.78-42.32H90.72c0,0-4.12-0.03-5.3,0.36c-2.08,0.69-3.270,2.4-4.49,4.56L5.92,147.62c-1.58,2.71-0.99,6.08,2.83,6.08H127.56z M126.75,125.64H50.42l16.47-27.92h2.81h59.12c3.64,0,12.96,3.45,12.96,14.54C141.79,119.05,135.81,125.64,126.75,125.64"/>
+      </g>
+    </mask>
+  </defs>
+  <!-- Geometría diseñada en 256 px reducida a 32 px (× 0,125). -->
+  <g transform="scale(0.125)">
+    <g fill="#FFFFFF" mask="url(#bz-dark)">
+      <path d="M28 92h48l128-62v196L76 164H28z"/>
+      <path d="M60 164h40l14 62H80z"/>
+    </g>
+    <path d="M226 98a44 44 0 0 1 0 60" fill="none" stroke="#FFFFFF" stroke-width="16" stroke-linecap="round"/>
+  </g>
+</svg>
