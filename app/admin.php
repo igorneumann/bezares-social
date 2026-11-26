@@ -90,6 +90,12 @@ class Admin
     {
         if (self::$me === null) {
             $u = !empty($_SESSION['uid']) ? Auth::user($_SESSION['uid']) : null;
+            // Al cambiar la contraseña se cierran las sesiones abiertas en otros equipos.
+            if ($u && !hash_equals(self::pass_mark($u), isset($_SESSION['pv']) ? (string) $_SESSION['pv'] : '')) {
+                $_SESSION = array();
+                session_regenerate_id(true);
+                $u = null;
+            }
             // «No cerrar sesión»: si la sesión caducó, se recupera con la cookie de 30 días.
             if (!$u && !empty($_COOKIE[self::REMEMBER_COOKIE])) {
                 $u = Auth::user_by_token($_COOKIE[self::REMEMBER_COOKIE]);
@@ -121,7 +127,14 @@ class Admin
     {
         session_regenerate_id(true);
         $_SESSION['uid'] = (int) $u['id'];
+        $_SESSION['pv'] = self::pass_mark($u);
         $_SESSION['last'] = time();
+    }
+
+    /** Huella de la contraseña actual: cambia al cambiarla, y con ella deja de valer la sesión. */
+    private static function pass_mark($u)
+    {
+        return hash_hmac('sha256', (string) $u['pass_hash'], 'bzs-session');
     }
 
     /* ================================================================ enrutado */
@@ -344,9 +357,7 @@ class Admin
             } else {
                 try {
                     $u = Auth::create(self::post('name'), self::post('email'), self::post('password'), 'admin');
-                    session_regenerate_id(true);
-                    $_SESSION['uid'] = (int) $u['id'];
-                    $_SESSION['last'] = time();
+                    self::start_session($u);
                     self::flash('Instalación completada. Configura ChatGPT y las redes sociales.');
                     self::redirect('/configuracion');
                 } catch (AppError $e) {
@@ -1739,7 +1750,8 @@ class Admin
                     throw new AppError('Las dos contraseñas nuevas no coinciden.');
                 }
                 Auth::set_password($me['id'], self::post('password'));
-                self::flash('Contraseña cambiada.');
+                self::start_session(Auth::user($me['id'])); // esta sesión sigue; las de otros equipos se cierran
+                self::flash('Contraseña cambiada. Se han cerrado las sesiones de otros equipos.');
             }
         } catch (AppError $e) {
             self::flash($e->getMessage(), true);
