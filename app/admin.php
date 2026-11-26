@@ -399,8 +399,8 @@ class Admin
     {
         $f = array(
             'in1' => '', 'in2' => '', 'photo' => '', 'news_url' => '', 'title' => '', 'source' => '',
-            'post_text' => '', 'add_link' => '1', 'networks' => null, 'when' => '',
-            'changes' => '', 'link_es' => '', 'link_en' => '',
+            'post_text' => '', 'tweet_text' => '', 'add_link' => '1', 'networks' => null, 'when' => '',
+            'changes' => '', 'target' => 'both', 'link_es' => '', 'link_en' => '',
         );
         $err = '';
         $generated = false;
@@ -441,19 +441,31 @@ class Admin
                     }
                     $prompt = Settings::get('prompt_post') ?: Settings::DEFAULT_PROMPT_POST;
                     $f['post_text'] = AI::generate($prompt, $news);
+                    $f['tweet_text'] = AI::generate(Settings::get('prompt_tweet') ?: Settings::DEFAULT_PROMPT_TWEET, $news, true);
+                    // El tweet se copia a mano: debe llevar ya el enlace de su idioma.
+                    if ($f['add_link'] !== '' && $f['news_url'] !== '' && !PostText::links_to_site($f['tweet_text'], $f['news_url'])) {
+                        $es = $f['link_es'] !== '' && (PostText::lang($f['tweet_text']) === 'es' || $f['link_en'] === '');
+                        $f['tweet_text'] .= "\n\n" . ($es ? $f['link_es'] : ($f['link_en'] ?: $f['news_url']));
+                    }
                     $generated = true;
                 } elseif ($action === 'revise') {
                     @set_time_limit(300);
                     if (trim($f['changes']) === '') {
                         throw new AppError('Escribe qué cambios quieres que haga ChatGPT.');
                     }
-                    if ($f['post_text'] === '') {
+                    $doPost = $f['target'] !== 'tweet' && $f['post_text'] !== '';
+                    $doTweet = $f['target'] !== 'post' && $f['tweet_text'] !== '';
+                    if (!$doPost && !$doTweet) {
                         throw new AppError('No hay ningún texto que cambiar: genera o escribe primero el texto.');
                     }
                     $news = array('url' => $f['news_url'], 'title' => $f['title'], 'text' => $f['source'],
                         'links' => array_filter(array('es' => $f['link_es'], 'en' => $f['link_en'])));
                     $changes = mb_substr($f['changes'], 0, 2000);
-                    $f['post_text'] = AI::revise($f['post_text'], $changes, $news);
+                    // Los dos textos se sustituyen a la vez: si una de las llamadas falla, no se pierde ni se mezcla nada.
+                    $newPost = $doPost ? AI::revise($f['post_text'], $changes, $news) : $f['post_text'];
+                    $newTweet = $doTweet ? AI::revise($f['tweet_text'], $changes, $news, true) : $f['tweet_text'];
+                    $f['post_text'] = $newPost;
+                    $f['tweet_text'] = $newTweet;
                     $f['changes'] = '';
                     $revised = true;
                 } elseif ($action === 'publish' || $action === 'schedule') {
@@ -462,7 +474,7 @@ class Admin
                     }
                     $data = array(
                         'title' => $f['title'], 'news_url' => $f['news_url'], 'image_url' => $f['photo'],
-                        'post_text' => $f['post_text'],
+                        'post_text' => $f['post_text'], 'tweet_text' => $f['tweet_text'],
                         'add_link' => $f['add_link'] === '1', 'networks' => $f['networks'], 'user_id' => $me['id'],
                     );
                     if ($action === 'schedule') {
@@ -516,7 +528,7 @@ class Admin
             . '</div>'
             . self::linkedin_preview($f) . '</div>';
 
-        $hasTexts = $f['post_text'] !== '';
+        $hasTexts = $f['post_text'] !== '' || $f['tweet_text'] !== '';
         $body .= '<div class="card' . ($hasTexts ? '' : ' card-dim') . '"><h2><span class="step">2</span> Textos para redes sociales</h2>';
         if ($f['news_url'] !== '' || $f['title'] !== '') {
             $body .= '<div class="info-box">📰 Noticia: <b>' . self::h($f['title'] ?: $f['news_url']) . '</b>'
@@ -532,8 +544,13 @@ class Admin
                 . ($f['source'] !== '' ? '<details><summary>Texto leído</summary><div class="src">' . nl2br(self::h($f['source'])) . (mb_strlen($f['source']) >= 1500 ? '…' : '') . '</div></details>' : '')
                 . '</div>';
         }
-        $body .= '<div class="field"><div class="label-row"><label for="post_text">Post · LinkedIn, Facebook e Instagram</label><button type="button" class="btn btn-ghost btn-sm" data-copy="post_text">Copiar</button></div>'
-            . '<textarea id="post_text" name="post_text" rows="16" data-count="3000">' . self::h($f['post_text']) . '</textarea><small class="counter" data-for="post_text"></small></div>';
+        $body .= '<div class="grid2">'
+            . '<div class="field"><div class="label-row"><label for="post_text">Post · LinkedIn, Facebook e Instagram</label><button type="button" class="btn btn-ghost btn-sm" data-copy="post_text">Copiar</button></div>'
+            . '<textarea id="post_text" name="post_text" rows="16" data-count="3000">' . self::h($f['post_text']) . '</textarea><small class="counter" data-for="post_text"></small></div>'
+            . '<div class="field"><div class="label-row"><label for="tweet_text">Tweet · X <span class="muted">(para copiar)</span></label><button type="button" class="btn btn-ghost btn-sm" data-copy="tweet_text">Copiar</button></div>'
+            . '<textarea id="tweet_text" name="tweet_text" rows="6" data-count="280" data-tweet>' . self::h($f['tweet_text']) . '</textarea><small class="counter" data-for="tweet_text"></small>'
+            . '<small>El panel no publica en X: copia el tweet y pégalo allí. Los enlaces cuentan como 23 caracteres.</small></div>'
+            . '</div>';
 
         // Imagen con IA: rellena el enlace de la foto sin recargar la página
         if ($hasTexts) {
@@ -544,11 +561,15 @@ class Admin
 
         // Pedir cambios a ChatGPT sobre los textos actuales (incluidas las ediciones a mano)
         if ($hasTexts) {
+            $targets = '';
+            foreach (array('both' => 'El post y el tweet', 'post' => 'Solo el post', 'tweet' => 'Solo el tweet') as $k => $l) {
+                $targets .= '<option value="' . $k . '"' . ($f['target'] === $k ? ' selected' : '') . '>' . $l . '</option>';
+            }
             $body .= '<div class="revise"><label for="changes">💬 Pedir cambios a ChatGPT</label>'
                 . '<textarea id="changes" name="changes" rows="2" maxlength="2000" placeholder="Por ejemplo: más corto, menos emojis, menciona la fecha de la feria…">' . self::h($f['changes']) . '</textarea>'
-                . '<div class="revise-row">'
+                . '<div class="revise-row"><label for="target">Aplicar a</label><select id="target" name="target">' . $targets . '</select>'
                 . '<button class="btn btn-secondary" name="action" value="revise" data-requires="changes" data-requires-msg="Escribe qué quieres cambiar" data-busy="ChatGPT está aplicando los cambios…">✨ Aplicar cambios</button></div>'
-                . '<small class="muted">Parte del texto de arriba tal como está ahora, con lo que hayas editado, y lo sustituye.</small></div>';
+                . '<small class="muted">Parte de los textos de arriba tal como están ahora, con lo que hayas editado, y los sustituye.</small></div>';
         }
 
         // Redes
@@ -560,7 +581,7 @@ class Admin
                 . self::net_badge($k) . ($ok ? ($k === 'instagram' ? '<small>requiere foto</small>' : '') : '<small><a href="/configuracion?tab=' . $k . '">sin configurar</a></small>') . '</label>';
         }
         $body .= '<div class="label">Publicar en</div><div class="netchecks">' . $nets . '</div>'
-            . '<label class="switch"><input type="checkbox" name="add_link" value="1"' . ($f['add_link'] ? ' checked' : '') . '><span><b>Añadir el enlace de la noticia</b><small class="muted">Al generar, cada idioma lleva su enlace. Si el post no tiene enlace, se añade al publicar en LinkedIn y Facebook: con foto, al final del texto; sin foto, como tarjeta de enlace. En Instagram los enlaces no funcionan y no se añade.</small></span></label>'
+            . '<label class="switch"><input type="checkbox" name="add_link" value="1"' . ($f['add_link'] ? ' checked' : '') . '><span><b>Añadir el enlace de la noticia</b><small class="muted">Al generar, cada idioma lleva su enlace, y el tweet también. Si el post no tiene enlace, se añade al publicar en LinkedIn y Facebook: con foto, al final del texto; sin foto, como tarjeta de enlace. En Instagram los enlaces no funcionan y no se añade.</small></span></label>'
             . '<div class="savebar publish-bar">'
             . '<div class="schedule-box"><label for="when">📅 Programar para</label>'
             . '<input id="when" type="datetime-local" name="when" value="' . self::h($f['when']) . '" min="' . date('Y-m-d\TH:i', time() + 120) . '" max="' . date('Y-m-d\TH:i', time() + 365 * 86400) . '">'
@@ -790,6 +811,7 @@ class Admin
                 $detail = '<div class="pub-detail">'
                     . ($pub['news_url'] ? '<p>📰 <a href="' . self::h(safe_url($pub['news_url'])) . '" target="_blank" rel="noopener noreferrer">' . self::h($pub['news_url']) . '</a></p>' : '')
                     . ($pub['post_text'] !== '' ? '<div class="label">Post</div><div class="src">' . nl2br(self::h($pub['post_text'])) . '</div>' : '')
+                    . ($pub['tweet_text'] !== '' ? '<div class="label">Tweet</div><div class="src">' . nl2br(self::h($pub['tweet_text'])) . '</div>' : '')
                     . self::metrics_detail($nets) . '</div>';
                 $rows .= '<tr><td class="nowrap">' . date('d/m/Y', (int) $pub['created_at']) . '<br><small class="muted">' . date('H:i', (int) $pub['created_at']) . '</small></td>'
                     . '<td class="pub-title"><details><summary>' . self::h($pub['title'] ?: '(sin título)') . '</summary>' . $detail . '</details></td>'
@@ -860,7 +882,7 @@ class Admin
         foreach ($posts as $nets) {
             foreach ($nets as $net => $po) {
                 if (!isset($byNet[$net])) {
-                    continue; // redes que el panel no usa
+                    continue; // redes que ya no se usan (X): se ven en el detalle, pero no cuentan
                 }
                 if ($po['status'] !== 'ok') {
                     $tot['bad']++;
@@ -981,6 +1003,7 @@ class Admin
             . ($p['news_url'] ? '<p>📰 <a href="' . self::h(safe_url($p['news_url'])) . '" target="_blank" rel="noopener noreferrer">' . self::h($p['news_url']) . '</a></p>' : '')
             . ($p['image_url'] && stripos($p['image_url'], 'https://') === 0 ? '<img class="thumb" src="' . self::h($p['image_url']) . '" alt="" loading="lazy">' : '')
             . ($p['post_text'] !== '' ? '<div class="label">Post</div><div class="src">' . nl2br(self::h($p['post_text'])) . '</div>' : '')
+            . ($p['tweet_text'] !== '' ? '<div class="label">Tweet</div><div class="src">' . nl2br(self::h($p['tweet_text'])) . '</div>' : '')
             . $extra . '</div></details>';
     }
 
@@ -1013,8 +1036,8 @@ class Admin
         $args = array();
         if ($q !== '') {
             $like = '%' . addcslashes($q, '%_\\') . '%';
-            $where .= ' AND (p.title LIKE ? OR p.post_text LIKE ? OR p.news_url LIKE ?)';
-            array_push($args, $like, $like, $like);
+            $where .= ' AND (p.title LIKE ? OR p.post_text LIKE ? OR p.tweet_text LIKE ? OR p.news_url LIKE ?)';
+            array_push($args, $like, $like, $like, $like);
         }
         if ($net !== '') {
             $where .= ' AND EXISTS (SELECT 1 FROM posts po WHERE po.publication_id = p.id AND po.network = ?)';
@@ -1334,7 +1357,8 @@ class Admin
                 . '<span class="muted">Página ' . $page . ' de ' . $pages . '</span>'
                 . ($page < $pages ? '<a class="btn btn-secondary btn-sm" href="' . self::h($url($filter, $net, $page + 1)) . '">Más antiguas →</a>' : '') . '</div>';
         }
-        $body .= '<p class="muted">LinkedIn: publicaciones que mencionan a la página. Facebook: publicaciones que la etiquetan. Instagram: fotos con etiqueta y @menciones (estas necesitan el webhook de Configuración → Instagram).</p>';
+        $body .= '<p class="muted">LinkedIn: publicaciones que mencionan a la página. Facebook: publicaciones que la etiquetan. Instagram: fotos con etiqueta y @menciones (estas necesitan el webhook de Configuración → Instagram). '
+            . 'X no está incluida: su plan gratuito no da acceso a la API.</p>';
         self::layout('Menciones', 'Publicaciones de otros que mencionan a Bezares', $body, $head);
     }
 

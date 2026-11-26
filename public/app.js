@@ -99,13 +99,26 @@
     return new RegExp('https?://(?:www\\.)?' + host.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '/[^\\s/]', 'i').test(text);
   };
 
-  // Contadores de caracteres
+  // Contadores de caracteres (X cuenta los enlaces como 23 y los emojis como 2)
+  function tweetLength(text) {
+    text = text.replace(/https?:\/\/\S+/g, '12345678901234567890123');
+    var n = 0;
+    for (var ch of text) { n += ch.codePointAt(0) > 0x2FFF ? 2 : 1; }
+    return n;
+  }
   document.querySelectorAll('textarea[data-count]').forEach(function (ta) {
     var out = document.querySelector('.counter[data-for="' + ta.id + '"]');
     var max = parseInt(ta.getAttribute('data-count'), 10);
+    var isTweet = ta.hasAttribute('data-tweet');
     function update() {
       if (!out) return;
-      var n = Array.from(ta.value).length;
+      var text = ta.value;
+      var n;
+      if (isTweet) {
+        n = tweetLength(text);
+      } else {
+        n = Array.from(text).length;
+      }
       out.textContent = n + ' / ' + max + ' caracteres';
       out.classList.toggle('over', n > max);
     }
@@ -113,7 +126,7 @@
     update();
   });
 
-  // Los botones de publicar se activan cuando hay texto en el post
+  // Los botones de publicar se activan cuando hay texto en el post (el tweet solo se copia)
   var pubs = document.querySelectorAll('button[value="publish"], button[value="schedule"]');
   if (pubs.length) {
     var postText = document.getElementById('post_text');

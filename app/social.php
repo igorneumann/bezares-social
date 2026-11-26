@@ -13,10 +13,11 @@ class Social
         'instagram' => 'Instagram',
     );
 
-    /** Nombre de una red. */
+    /** Nombre de una red, también de las que ya no se usan (X) en publicaciones antiguas. */
     public static function label($network)
     {
-        return isset(self::NETWORKS[$network]) ? self::NETWORKS[$network] : (string) $network;
+        $n = self::NETWORKS + array('x' => 'X');
+        return isset($n[$network]) ? $n[$network] : (string) $network;
     }
 
     const METRICS = array(

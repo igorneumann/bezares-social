@@ -5,6 +5,7 @@ class Settings
     private static $cache = null;
 
     const DEFAULT_PROMPT_POST = 'Cree un post para linkedin con emojis y hashtags, para Bezares SA, en ingles y español separados por "--- Bezares s.a. ---"';
+    const DEFAULT_PROMPT_TWEET = 'Cree un tweet, en ingles, para compartir esa noticia de Bezares SA';
 
     const DEFAULT_PROMPT_REPLY = 'Escriba una respuesta breve, amable y profesional a este comentario, en nombre de Bezares SA y en el mismo idioma del comentario';
 
@@ -21,6 +22,7 @@ class Settings
                 array('k' => 'openai_key', 'label' => 'API key de OpenAI', 'type' => 'secret'),
                 array('k' => 'openai_model', 'label' => 'Modelo', 'type' => 'text', 'def' => 'gpt-4o-mini', 'help' => 'Cualquier modelo de chat de tu cuenta de OpenAI (p. ej. gpt-4o-mini, gpt-4.1, gpt-5-mini).'),
                 array('k' => 'prompt_post', 'label' => 'Prompt del post (LinkedIn, Facebook e Instagram)', 'type' => 'textarea', 'def' => self::DEFAULT_PROMPT_POST),
+                array('k' => 'prompt_tweet', 'label' => 'Prompt del tweet (X)', 'type' => 'textarea', 'def' => self::DEFAULT_PROMPT_TWEET),
                 array('k' => 'prompt_reply', 'label' => 'Prompt para contestar a las respuestas', 'type' => 'textarea', 'def' => self::DEFAULT_PROMPT_REPLY),
                 array('k' => 'prompt_mention', 'label' => 'Prompt para comentar las menciones', 'type' => 'textarea', 'def' => self::DEFAULT_PROMPT_MENTION),
                 array('k' => 'prompt_image', 'label' => 'Prompt de la imagen', 'type' => 'textarea', 'def' => self::DEFAULT_PROMPT_IMAGE),
@@ -104,8 +106,8 @@ class Settings
     }
 
     /**
-     * Migración: cifra las claves que se guardaron sin cifrar en versiones anteriores.
-     * Solo actúa si el cifrado está disponible; si no, no toca nada.
+     * Migración: cifra las claves que se guardaron sin cifrar (versiones anteriores, o las claves de X que
+     * antes eran campos de texto). Solo actúa si el cifrado está disponible; si no, no toca nada.
      */
     public static function encrypt_legacy()
     {

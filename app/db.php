@@ -56,7 +56,7 @@ class DB
         self::exec('UPDATE `' . $table . '` SET ' . $set . ' WHERE ' . $w, array_merge(array_values($data), array_values($where)));
     }
 
-    const SCHEMA_VERSION = '9';
+    const SCHEMA_VERSION = '10';
 
     /** Crea las tablas si la versión guardada no es la actual. */
     public static function ensure_schema()
@@ -100,6 +100,7 @@ class DB
               news_url VARCHAR(1000) NOT NULL DEFAULT '',
               image_url VARCHAR(1000) NOT NULL DEFAULT '',
               post_text MEDIUMTEXT NOT NULL,
+              tweet_text TEXT NOT NULL,
               created_at INT NOT NULL DEFAULT 0,
               KEY created_at (created_at)
             ) $e",
@@ -203,19 +204,18 @@ class DB
                 ADD status VARCHAR(12) NOT NULL DEFAULT 'published' AFTER user_id,
                 ADD scheduled_at INT NOT NULL DEFAULT 0 AFTER status,
                 ADD claimed_at INT NOT NULL DEFAULT 0 AFTER scheduled_at,
-                ADD networks VARCHAR(100) NOT NULL DEFAULT '' AFTER post_text,
+                ADD networks VARCHAR(100) NOT NULL DEFAULT '' AFTER tweet_text,
                 ADD add_link TINYINT(1) NOT NULL DEFAULT 1 AFTER networks,
                 ADD KEY status_sched (status, scheduled_at)");
         }
         // v5: las que figuraban como publicadas sin ningún resultado no llegaron a enviarse (envíos interrumpidos).
         self::pdo()->exec("UPDATE publications p LEFT JOIN posts o ON o.publication_id = p.id SET p.status = 'failed' WHERE p.status = 'published' AND o.id IS NULL");
-        // v9: sin X. Se quitan el tweet, su prompt, las claves de X y los envíos antiguos a X.
+        // v10: vuelve la columna del tweet si una versión anterior la quitó.
         $cols = self::pdo()->query('SHOW COLUMNS FROM publications')->fetchAll(PDO::FETCH_COLUMN);
-        if (in_array('tweet_text', $cols, true)) {
-            self::pdo()->exec('ALTER TABLE publications DROP COLUMN tweet_text');
+        if (!in_array('tweet_text', $cols, true)) {
+            self::pdo()->exec('ALTER TABLE publications ADD tweet_text TEXT NULL AFTER post_text');
+            self::pdo()->exec("UPDATE publications SET tweet_text = '' WHERE tweet_text IS NULL");
+            self::pdo()->exec('ALTER TABLE publications MODIFY tweet_text TEXT NOT NULL');
         }
-        self::pdo()->exec("DELETE FROM settings WHERE k = 'prompt_tweet' OR k LIKE 'x\\_%'");
-        self::pdo()->exec("DELETE FROM posts WHERE network = 'x'");
-        self::pdo()->exec("UPDATE publications SET networks = TRIM(BOTH ',' FROM REPLACE(CONCAT(',', networks, ','), ',x,', ',')) WHERE CONCAT(',', networks, ',') LIKE '%,x,%'");
     }
 }
