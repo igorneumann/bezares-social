@@ -3,12 +3,12 @@
 Panel web para compartir las noticias de Bezares en **LinkedIn, Facebook e Instagram** con textos generados por **ChatGPT**, y ver las **estadísticas** de cada publicación. Colores de Bezares Expo y misma tecnología que el panel de Bezares Chat (PHP + MySQL, sin dependencias).
 
 ```
- Enlace WordPress / texto ──► lectura de la noticia ──► ChatGPT (2 prompts editables)
+ Enlace WordPress / texto ──► lectura de la noticia ──► ChatGPT (prompt editable)
                                                           │
                               revisar y editar textos ◄───┘
                                        │
                                        ▼  Publicar
-                 LinkedIn · Facebook · Instagram ──► Estadísticas        Tweet para copiar en X
+                 LinkedIn · Facebook · Instagram ──► Estadísticas
 ```
 
 ## Pestañas
@@ -18,18 +18,18 @@ Panel web para compartir las noticias de Bezares en **LinkedIn, Facebook e Insta
   2. *Información adicional* (opcional): el enlace de la noticia en el otro idioma, otro enlace u otro texto.
   3. *Enlace de la foto* (opcional): si se deja vacío se usa la imagen destacada de la noticia.
   - A la derecha, una **vista previa con el aspecto de LinkedIn** que se actualiza mientras se edita el texto o la foto.
-  - **✨ Generar textos**: crea con ChatGPT el post (LinkedIn, Facebook e Instagram) y el tweet (X), que se copia a mano: el panel no publica en X porque su plan gratuito no da acceso a la API. Los textos se pueden editar antes de publicar.
+  - **✨ Generar textos**: crea con ChatGPT el post (LinkedIn, Facebook e Instagram). El texto se puede editar antes de publicar.
   - El post se entrega siempre con una línea en blanco entre párrafos: se le pide a ChatGPT y además se corrige al recibirlo (separador y hashtags aparte, bloques largos divididos por frases). Lo que edites a mano no se modifica.
   - El separador entre idiomas es el que aparece entre guiones en el prompt del post (`--- Bezares s.a. ---`): si ChatGPT lo reduce a `---`, lo cambia o lo olvida, se restaura.
-  - Debajo del texto de cada idioma va el enlace de ese idioma, y el tweet lleva el del suyo. Mandan los enlaces pegados, en cualquiera de los dos campos; el que falte se toma de la web (menú de idiomas de WPML o `hreflang`).
+  - Debajo del texto de cada idioma va el enlace de ese idioma. Mandan los enlaces pegados, en cualquiera de los dos campos; el que falte se toma de la web (menú de idiomas de WPML o `hreflang`).
   - **🖼 Generar imagen**: ChatGPT crea una imagen cuadrada (JPG) con el logo de Bezares para ilustrar la noticia (prompt, modelo y logo editables) y la pone como foto. Se guarda en `public/generadas`, que necesita permiso de escritura; las que no usa ninguna publicación se borran a los 30 días.
-  - **💬 Pedir cambios a ChatGPT**: una vez generados, se escribe qué cambiar y ChatGPT lo aplica al post, al tweet o a los dos, partiendo de los textos actuales (con las ediciones a mano).
+  - **💬 Pedir cambios a ChatGPT**: una vez generado, se escribe qué cambiar y ChatGPT lo aplica al post, partiendo del texto actual (con las ediciones a mano).
   - **🚀 Publicar ahora**: publica en las redes marcadas y muestra el enlace de cada publicación o el error.
   - **📅 Programar**: elige fecha y hora (zona horaria de `config.php`) y la publicación sale sola en ese momento.
 - **📰 Publicaciones**: todas las publicaciones anteriores, con buscador, filtro por red, textos, resultado en cada red y estadísticas.
 - **🗓 Programadas**: publicaciones pendientes con su fecha, redes y textos; se puede **cambiar la fecha**, **publicar ahora** o **cancelar**. Debajo, el historial con el resultado en cada red. Avisa si el cron no se está ejecutando.
 - **💬 Respuestas**: comentarios que recibe lo publicado desde el panel en los últimos 30 días, con aviso de los nuevos (menú, pestaña y notificación del navegador), filtros y contestación, con propuesta de ChatGPT (prompt editable) que siempre se revisa antes de enviar. El cron los busca cada 30 minutos (LinkedIn, cada hora). Necesita los permisos nuevos de cada red (ver las guías de Configuración). Por las normas de LinkedIn, el texto de sus comentarios se borra a las 48 horas, no se guarda el nombre de sus autores y la IA está desactivada para ellos hasta que se active en Configuración.
-- **@ Menciones**: publicaciones de otros que mencionan a Bezares (LinkedIn y Facebook), fotos de Instagram con etiqueta y @menciones de Instagram (por webhook), con aviso, filtros, comentario y propuesta de ChatGPT. Instagram no permite comentar las fotos en las que solo se etiqueta, y LinkedIn puede no dejar leer o comentar publicaciones de sus miembros. X no está incluida.
+- **@ Menciones**: publicaciones de otros que mencionan a Bezares (LinkedIn y Facebook), fotos de Instagram con etiqueta y @menciones de Instagram (por webhook), con aviso, filtros, comentario y propuesta de ChatGPT. Instagram no permite comentar las fotos en las que solo se etiqueta, y LinkedIn puede no dejar leer o comentar publicaciones de sus miembros.
 - **📊 Estadísticas**: impresiones, reacciones, comentarios, compartidos y clics por publicación y por red, con totales y tasa de interacción. Botón «Actualizar estadísticas» (o `cron.php`). Seguidores, seguidores nuevos y variación neta por red: el total se guarda cada día desde la instalación. Se compara con otro periodo: por defecto el **periodo anterior** de la misma duración, o el mismo periodo del año anterior, o fechas personalizadas.
 - **⚙️ Configuración**: claves de ChatGPT, LinkedIn, Facebook e Instagram, con un botón **❔ Cómo conseguir las claves** (ventana con instrucciones paso a paso) otro para **probar la conexión** y otro para **verificar los permisos** de la API uno a uno (solo lectura: no publica nada). Prompts editables. En **General** se elige cuántos meses se guardan las publicaciones (12 por defecto; 0 = siempre).
 - **👥 Usuarios** (administradores): personas con acceso y su rol. Los editores ven **👤 Mi cuenta** para cambiar su contraseña.
@@ -43,10 +43,9 @@ Panel web para compartir las noticias de Bezares en **LinkedIn, Facebook e Insta
 
 Los permisos se comprueban en el servidor en cada operación. El primer usuario es administrador y siempre debe quedar al menos uno.
 
-### Prompts por defecto (editables)
+### Prompt por defecto (editable)
 
 - Post: `Cree un post para linkedin con emojis y hashtags, para Bezares SA, en ingles y español separados por "--- Bezares s.a. ---"`
-- Tweet: `Cree un tweet, en ingles, para compartir esa noticia de Bezares SA`
 
 ## Requisitos
 

@@ -10,7 +10,6 @@ class AI
 
     const FORMAT_POST = 'Formato: párrafos cortos (de 1 a 3 frases) separados SIEMPRE por una línea en blanco, es decir, dos saltos de línea; nunca todo en un solo bloque. '
         . 'Los hashtags van en su propio párrafo, al final de cada idioma. Si se pide un separador entre idiomas, va solo en su línea, con una línea en blanco antes y otra después.';
-    const FORMAT_TWEET = 'Formato: un tweet de 280 caracteres como máximo; si tiene varias ideas, sepáralas con una línea en blanco, y los hashtags van al final.';
 
     /** Envía un mensaje a ChatGPT y devuelve el texto limpio. */
     private static function chat($content)
@@ -54,17 +53,14 @@ class AI
     }
 
     /** Instrucciones fijas de formato, separador y enlaces. */
-    private static function rules(array $news, $tweet, $sep)
+    private static function rules(array $news, $sep)
     {
-        $r = $tweet ? self::FORMAT_TWEET : self::FORMAT_POST;
+        $r = self::FORMAT_POST;
         if ($sep !== '') {
             $r .= "\nSepara los idiomas con esta línea exacta, completa y copiada tal cual: \"" . $sep . '". No la sustituyas por "---" ni la traduzcas.';
         }
         $l = $news['links'];
-        if ($l && $tweet) {
-            $r .= "\nTermina el tweet con el enlace de la noticia, copiado sin cambios (ocupa 23 caracteres): " . (isset($l['en']) ? $l['en'] : $l['es'])
-                . (count($l) === 2 ? ' (si el tweet está en español, usa ' . $l['es'] . ')' : '');
-        } elseif ($l) {
+        if ($l) {
             $r .= "\nENLACES (obligatorio): justo debajo del texto de cada idioma y antes de sus hashtags, pon en un párrafo aparte el enlace de ese idioma, copiado sin cambios y sin formato Markdown. "
                 . 'No pongas el enlace de un idioma en la parte del otro ni los juntes al final.'
                 . (isset($l['en']) ? "\n- Debajo del texto en inglés: " . $l['en'] : '')
@@ -79,48 +75,41 @@ class AI
         return PostText::separator(Settings::get('prompt_post') ?: Settings::DEFAULT_PROMPT_POST);
     }
 
-    /** El tweet conserva sus saltos de línea (cuentan para los 280 caracteres); solo se revisa su enlace. */
-    private static function finish($text, array $news, $tweet, $sep, $addLinks)
+    /** Ordena el texto: párrafos, separador entre idiomas y enlace de cada idioma. */
+    private static function finish($text, array $news, $sep, $addLinks)
     {
-        $links = $news['links'];
-        if ($tweet && count($links) === 1) {
-            $links = array('es' => reset($links), 'en' => reset($links)); // un solo enlace: vale para cualquier idioma
-        }
-        $text = PostText::plain_links($text);
-        return $tweet
-            ? PostText::language_links($text, $links, '', $addLinks)
-            : PostText::post($text, $sep, $links, $addLinks);
+        return PostText::post(PostText::plain_links($text), $sep, $news['links'], $addLinks);
     }
 
     /**
      * Genera un texto a partir de un prompt editable y de la noticia.
      * @param array $news {url, title, text, links: {es?, en?}}
      */
-    public static function generate($prompt, array $news, $tweet = false)
+    public static function generate($prompt, array $news)
     {
-        $sep = $tweet ? '' : self::separator();
-        $text = self::chat(trim($prompt) . "\n\n" . self::rules($news, $tweet, $sep) . "\n\n" . self::news_block($news));
-        return self::finish($text, $news, $tweet, $sep, true);
+        $sep = self::separator();
+        $text = self::chat(trim($prompt) . "\n\n" . self::rules($news, $sep) . "\n\n" . self::news_block($news));
+        return self::finish($text, $news, $sep, true);
     }
 
     /**
      * Aplica los cambios pedidos por el usuario a un texto ya generado (con sus ediciones a mano).
      * No vuelve a añadir un enlace que el usuario haya quitado.
      */
-    public static function revise($text, $changes, array $news, $tweet = false)
+    public static function revise($text, $changes, array $news)
     {
-        $sep = $tweet ? '' : self::separator();
+        $sep = self::separator();
         // Solo se exige el separador si el texto actual lo lleva.
         if ($sep !== '' && strpos($text, $sep) === false) {
             $sep = '';
         }
         $new = self::chat("Aplica estos cambios al texto actual:\n" . trim($changes)
             . "\n\nDevuelve el texto completo ya modificado. Conserva todo lo que no se pida cambiar: idiomas, separadores, párrafos, emojis, hashtags y enlaces. "
-            . ($tweet ? self::FORMAT_TWEET : self::FORMAT_POST)
+            . self::FORMAT_POST
             . ($sep !== '' ? "\nMantén completa y tal cual la línea que separa los idiomas: \"" . $sep . '".' : '')
             . "\n\n<texto_actual>\n" . trim($text) . "\n</texto_actual>"
             . "\n\n" . self::news_block($news));
-        return self::finish($new, $news, $tweet, $sep, false);
+        return self::finish($new, $news, $sep, false);
     }
 
     /** Propuesta de comentario para una publicación que menciona a Bezares. */

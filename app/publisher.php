@@ -17,7 +17,7 @@ class Publisher
 
     /**
      * Comprueba y normaliza los datos de una publicación.
-     * @param array $d {title, news_url, image_url, post_text, tweet_text, add_link(bool), networks(array), user_id}
+     * @param array $d {title, news_url, image_url, post_text, add_link(bool), networks(array), user_id}
      */
     private static function prepare(array $d)
     {
@@ -26,7 +26,6 @@ class Publisher
             throw new AppError('Elige al menos una red social.');
         }
         $post = trim($d['post_text']);
-        $tweet = trim($d['tweet_text']);
         if ($post === '') {
             throw new AppError('El texto del post está vacío.');
         }
@@ -40,7 +39,6 @@ class Publisher
             'news_url'   => mb_substr(safe_url($d['news_url']), 0, 1000),
             'image_url'  => mb_substr($image, 0, 1000),
             'post_text'  => $post,
-            'tweet_text' => $tweet,
             'networks'   => implode(',', $networks),
             'add_link'   => empty($d['add_link']) ? 0 : 1,
         );
@@ -181,7 +179,7 @@ class Publisher
             $res = array('status' => 'error');
             try {
                 if (!isset(Social::NETWORKS[$net])) {
-                    throw new AppError('El panel ya no publica en ' . Social::label($net) . ': copia el texto y publícalo a mano.');
+                    throw new AppError('El panel no publica en ' . Social::label($net) . '.');
                 }
                 if (!Settings::configured($net)) {
                     throw new AppError('No está configurada (Configuración → ' . Social::NETWORKS[$net] . ').');
@@ -280,7 +278,7 @@ class Publisher
     public static function refresh_metrics($since, $limit = 150)
     {
         @set_time_limit(300);
-        $rows = DB::rows("SELECT * FROM posts WHERE status = 'ok' AND ext_id <> '' AND network <> 'x' AND created_at >= ? ORDER BY metrics_at ASC LIMIT " . (int) $limit, array((int) $since));
+        $rows = DB::rows("SELECT * FROM posts WHERE status = 'ok' AND ext_id <> '' AND created_at >= ? ORDER BY metrics_at ASC LIMIT " . (int) $limit, array((int) $since));
         $ok = 0;
         $fail = 0;
         $linkedin = array('shares' => array(), 'ugc' => array());

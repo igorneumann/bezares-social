@@ -3,7 +3,7 @@
 class Http
 {
     /**
-     * Petición a una API (OpenAI, LinkedIn, Meta, X).
+     * Petición a una API (OpenAI, LinkedIn, Meta).
      * @return array{status:int, body:string, json:mixed, headers:array, error:?string}
      */
     public static function request($method, $url, array $headers = array(), $body = null, $timeout = 30, array $extra = array())
@@ -175,7 +175,7 @@ class Http
         return $root . $dir . $href;
     }
 
-    /** Descarga una imagen (para subirla a LinkedIn o X). @return array{body:string, mime:string} */
+    /** Descarga una imagen (para subirla a LinkedIn). @return array{body:string, mime:string} */
     public static function fetch_image($url)
     {
         // Las imágenes generadas por el panel se leen del disco: el propio servidor está bloqueado para las descargas.
