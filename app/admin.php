@@ -328,6 +328,7 @@ class Admin
             . '<form method="post" action="/logout" class="inline">' . self::csrf_field() . '<button class="btn btn-sm">Cerrar sesión</button></form></div></aside>'
             . '<main class="main"><div class="page-head"><div><h1>' . self::h($title) . '</h1>' . ($subtitle ? '<p>' . self::h($subtitle) . '</p>' : '') . '</div>' . $headActions . '</div>'
             . self::flash() . $body . '</main></div>'
+            . '<div class="app-version" title="Versión del programa">v' . self::h(BZS_VERSION) . '</div>'
             . '<div class="busy" id="busy" hidden><div class="busy-card"><div class="spinner"></div><p id="busy-msg">Un momento…</p></div></div>'
             . '</body></html>';
         exit;

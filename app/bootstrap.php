@@ -2,7 +2,8 @@
 /** Arranque común: configuración, base de datos, utilidades. */
 
 define('BZS_ROOT', dirname(__DIR__));
-define('BZS_VERSION', '1.0.0');
+// Versión del programa: app/VERSION (sube 0.1 en cada commit; ver el hook pre-commit).
+define('BZS_VERSION', trim((string)@file_get_contents(__DIR__ . '/VERSION')) ?: '1.0');
 
 $cfgFile = BZS_ROOT . '/config.php';
 if (!file_exists($cfgFile)) {

@@ -299,3 +299,6 @@ input[type=number]{max-width:140px}
 .imggen>div{flex:1;min-width:240px}
 .imggen .ai-msg{margin:6px 0 0;font-size:14px}
 .imggen .ai-msg:empty{display:none}
+
+/* Versión del programa, esquina inferior derecha */
+.app-version{position:fixed;right:10px;bottom:6px;z-index:5;font-size:12px;color:var(--muted);pointer-events:none;user-select:none}
