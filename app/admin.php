@@ -417,6 +417,15 @@ class Admin
         $generated = false;
         $revised = false;
 
+        // Después de publicar se conservan los textos (solo en la primera carga del resultado).
+        if ($method !== 'POST' && isset($_SESSION['pub_form'])) {
+            $kept = $_SESSION['pub_form'];
+            unset($_SESSION['pub_form']);
+            if (is_array($kept) && isset($kept['id'], $kept['f']) && is_array($kept['f']) && !empty($_GET['hecho']) && (int) $_GET['hecho'] === (int) $kept['id']) {
+                $f = array_intersect_key($kept['f'], $f) + $f;
+            }
+        }
+
         if ($method === 'POST') {
             self::check_csrf();
             foreach ($f as $k => $v) {
@@ -495,6 +504,9 @@ class Admin
                         self::redirect('/programadas');
                     }
                     $id = Publisher::publish($data);
+                    // Los textos se vuelven a mostrar una sola vez, tras la redirección; al recargar, el formulario sale vacío.
+                    $f['changes'] = '';
+                    $_SESSION['pub_form'] = array('id' => $id, 'f' => $f);
                     self::redirect('/?hecho=' . $id);
                 }
             } catch (AppError $e) {
