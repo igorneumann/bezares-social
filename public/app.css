@@ -352,3 +352,5 @@ tbody.mgroup.closed tr:not(.mhead){display:none!important}
 /* Respuestas y Menciones: dos lado a lado */
 .thread-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start;margin-bottom:16px}.thread-grid>.card{margin:0;min-width:0}
 @media (max-width:1000px){.thread-grid{grid-template-columns:1fr}}
+/* Los meses de las fichas usan .mgrid como en el resto del panel; aquí .mgrid es también la rejilla de cifras: el mes va en bloque */
+section.mgroup.mgrid{display:block}
