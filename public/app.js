@@ -418,7 +418,7 @@
 document.addEventListener('click', function (e) {
   var b = e.target.closest && e.target.closest('[data-month-toggle]');
   if (!b) return;
-  var g = b.closest('tbody');
+  var g = b.closest('.mgroup') || b.closest('tbody'); // un mes de tabla o de fichas
   g.classList.toggle('closed');
   b.setAttribute('aria-expanded', String(!g.classList.contains('closed')));
 });

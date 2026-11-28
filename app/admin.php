@@ -1132,14 +1132,24 @@ class Admin
             }
         }
 
+        // Vista: fichas lado a lado (por defecto) o la lista; se recuerda la última elegida
+        $vista = in_array($get('vista'), array('cuadricula', 'lista'), true) ? $get('vista') : (string) ($_SESSION['social_pubs_view'] ?? 'cuadricula');
+        $_SESSION['social_pubs_view'] = $vista;
         // Por meses (del día en que salió), con el resumen de todo el mes en la cabecera
-        $tbodies = '';
-        $rows = '';
-        $month = null;
-        $flush = function () use (&$tbodies, &$rows, &$month, $where, $args) {
-            if ($rows === '') {
-                return;
+        $byMonth = array();
+        foreach ($pubs as $p) {
+            $mine = isset($posts[$p['id']]) ? $posts[$p['id']] : array();
+            $views = 0;
+            $inter = 0;
+            foreach ($mine as $po) {
+                if ($po['status'] === 'ok') {
+                    $views += self::views($po['m']);
+                    $inter += self::interactions($po['m']);
+                }
             }
+            $byMonth[date('Y-m', (int) $p['created_at'])][] = array($p, $mine, $views, $inter);
+        }
+        $monthSum = function ($month) use ($where, $args) {
             $start = strtotime($month . '-01 00:00:00');
             $ids = array_column(DB::rows('SELECT p.id FROM publications p WHERE ' . $where . ' AND p.created_at >= ? AND p.created_at < ?', array_merge($args, array($start, strtotime('+1 month', $start)))), 'id');
             $views = 0;
@@ -1152,32 +1162,32 @@ class Admin
                 }
             }
             $n = count($ids);
-            $sum = ($n === 1 ? '1 publicación' : $n . ' publicaciones') . ' · ' . self::num($views) . ' impresiones · ' . self::num($inter) . ' interacciones';
-            $tbodies .= self::month_group(self::month_label($month), $sum, $tbodies === '', 5, $rows);
-            $rows = '';
+            return ($n === 1 ? '1 publicación' : $n . ' publicaciones') . ' · ' . self::num($views) . ' impresiones · ' . self::num($inter) . ' interacciones';
         };
-        foreach ($pubs as $p) {
-            $ym = date('Y-m', (int) $p['created_at']);
-            if ($ym !== $month) {
-                $flush();
-                $month = $ym;
-            }
-            $mine = isset($posts[$p['id']]) ? $posts[$p['id']] : array();
-            $views = 0;
-            $inter = 0;
-            foreach ($mine as $po) {
-                if ($po['status'] === 'ok') {
-                    $views += self::views($po['m']);
-                    $inter += self::interactions($po['m']);
+        $tbodies = '';
+        $grid = '';
+        foreach ($byMonth as $month => $items) {
+            $sum = $monthSum($month);
+            $first = $tbodies === '' && $grid === '';
+            if ($vista === 'lista') {
+                $rows = '';
+                foreach ($items as list($p, $mine, $views, $inter)) {
+                    $rows .= '<tr><td class="nowrap">' . date('d/m/Y', (int) $p['created_at']) . '<br><small class="muted">' . date('H:i', (int) $p['created_at']) . '</small></td>'
+                        . '<td class="pub-title">' . self::pub_detail($p, self::metrics_detail($mine))
+                        . '<small class="muted">Por ' . self::h($p['author'] ?: '—') . ((int) $p['scheduled_at'] ? ' · programada' : '') . '</small>' . ($p['status'] === 'failed' ? ' <span class="badge b-bad">' . self::h(Publisher::STATUS['failed']) . '</span>' : '') . '</td>'
+                        . '<td>' . self::net_results($mine) . '</td>'
+                        . '<td>' . self::num($views) . '</td><td class="total">' . self::num($inter) . '</td></tr>';
                 }
+                $tbodies .= self::month_group(self::month_label($month), $sum, $first, 5, $rows);
+            } else {
+                $cards = '';
+                foreach ($items as list($p, $mine, $views, $inter)) {
+                    $cards .= self::pub_tile($p, $mine, $views, $inter);
+                }
+                $grid .= '<section class="mgroup mgrid' . ($first ? '' : ' closed') . '"><div class="mhead"><button type="button" aria-expanded="' . ($first ? 'true' : 'false') . '" data-month-toggle><span class="chev" aria-hidden="true"></span>'
+                    . '<b>' . self::h(self::month_label($month)) . '</b><span class="muted">' . self::h($sum) . '</span></button></div><div class="co-grid">' . $cards . '</div></section>';
             }
-            $rows .= '<tr><td class="nowrap">' . date('d/m/Y', (int) $p['created_at']) . '<br><small class="muted">' . date('H:i', (int) $p['created_at']) . '</small></td>'
-                . '<td class="pub-title">' . self::pub_detail($p, self::metrics_detail($mine))
-                . '<small class="muted">Por ' . self::h($p['author'] ?: '—') . ((int) $p['scheduled_at'] ? ' · programada' : '') . '</small>' . ($p['status'] === 'failed' ? ' <span class="badge b-bad">' . self::h(Publisher::STATUS['failed']) . '</span>' : '') . '</td>'
-                . '<td>' . self::net_results($mine) . '</td>'
-                . '<td>' . self::num($views) . '</td><td class="total">' . self::num($inter) . '</td></tr>';
         }
-        $flush();
 
         $opts = '<option value="">Todas las redes</option>';
         foreach (Social::NETWORKS as $k => $l) {
@@ -1199,10 +1209,16 @@ class Admin
             $link = function ($n, $label) use ($q, $net, $vq) {
                 return '<a class="btn btn-secondary btn-sm" href="/publicaciones?' . self::h(http_build_query($vq + array('q' => $q, 'red' => $net, 'pag' => $n))) . '">' . $label . '</a>';
             };
-            $body .= '<div class="card"><h2>' . ($filtered ? 'Resultados' : array('publicadas' => 'Publicadas', 'fallidas' => 'Fallidas', 'todas' => 'Todas')[$tab]) . ' <span class="badge b-role">' . $total . '</span></h2>'
-                . '<div class="table-wrap"><table class="pubs"><thead><tr><th>Fecha</th><th>Noticia</th><th>Redes</th><th>Impresiones</th><th>Interacciones</th></tr></thead>' . $tbodies . '</table></div>'
-                . ($pages > 1 ? '<div class="pager">' . ($page > 1 ? $link($page - 1, '← Más recientes') : '') . '<span class="muted">Página ' . $page . ' de ' . $pages . '</span>' . ($page < $pages ? $link($page + 1, 'Más antiguas →') : '') . '</div>' : '')
-                . '</div>';
+            $sw = '<div class="vswitch" role="group" aria-label="Vista">';
+            foreach (array('cuadricula' => '▦ Cuadrícula', 'lista' => '☰ Lista') as $vk => $vv) {
+                $sw .= '<a class="' . ($vk === $vista ? 'on' : '') . '" href="/publicaciones?' . self::h(http_build_query($vq + array('q' => $q, 'red' => $net, 'vista' => $vk))) . '"' . ($vk === $vista ? ' aria-current="true"' : '') . '>' . $vv . '</a>';
+            }
+            $sw .= '</div>';
+            $pager = $pages > 1 ? '<div class="pager">' . ($page > 1 ? $link($page - 1, '← Más recientes') : '') . '<span class="muted">Página ' . $page . ' de ' . $pages . '</span>' . ($page < $pages ? $link($page + 1, 'Más antiguas →') : '') . '</div>' : '';
+            $head = '<div class="vbar"><h2 style="margin:0">' . ($filtered ? 'Resultados' : array('publicadas' => 'Publicadas', 'fallidas' => 'Fallidas', 'todas' => 'Todas')[$tab]) . ' <span class="badge b-role">' . $total . '</span></h2>' . $sw . '</div>';
+            $body .= $vista === 'lista'
+                ? '<div class="card">' . $head . '<div class="table-wrap"><table class="pubs"><thead><tr><th>Fecha</th><th>Noticia</th><th>Redes</th><th>Impresiones</th><th>Interacciones</th></tr></thead>' . $tbodies . '</table></div>' . $pager . '</div>'
+                : $head . $grid . $pager;
         }
         $months = Publisher::retention_months();
         $body .= '<p class="muted">' . ($months ? 'Las publicaciones se guardan ' . $months . ($months === 1 ? ' mes' : ' meses') . '; después se borran del panel (no de las redes).' : 'Las publicaciones se guardan siempre.')
@@ -1237,6 +1253,22 @@ class Admin
         $m = array('', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre');
         $p = explode('-', (string) $ym);
         return isset($p[1], $m[(int) $p[1]]) && (int) $p[1] ? $m[(int) $p[1]] . ' ' . $p[0] : 'Sin fecha';
+    }
+
+    /** Ficha de una publicación (vista Cuadrícula): imagen, fecha, noticia, redes y cifras. */
+    private static function pub_tile(array $p, array $mine, $views, $inter)
+    {
+        $img = preg_match('#^https://#i', (string) $p['image_url']) ? '<div class="pt-img"><img src="' . self::h($p['image_url']) . '" alt="" loading="lazy"></div>' : '<div class="pt-img pt-noimg" aria-hidden="true">📰</div>';
+        $title = trim((string) $p['title']) !== '' ? $p['title'] : mb_strimwidth(trim(preg_replace('/\s+/', ' ', (string) $p['post_text'])), 0, 80, '…');
+        $text = mb_strimwidth(trim(preg_replace('/\s+/', ' ', (string) $p['post_text'])), 0, 150, '…');
+        return '<article class="card co-tile pt-tile">' . $img
+            . '<div><small class="muted">' . date('d/m/Y H:i', (int) $p['created_at']) . ' · ' . self::h($p['author'] ?: '—') . ((int) $p['scheduled_at'] ? ' · programada' : '') . '</small>'
+            . '<h2 class="co-name">' . (preg_match('#^https?://#i', (string) $p['news_url']) ? '<a href="' . self::h($p['news_url']) . '" target="_blank" rel="noopener">' . self::h($title) . '</a>' : self::h($title)) . '</h2>'
+            . ($p['status'] === 'failed' ? '<span class="badge b-bad">' . self::h(Publisher::STATUS['failed']) . '</span>' : '') . '</div>'
+            . '<p class="mut co-tile-sub">' . self::h($text) . '</p>'
+            . '<div class="pt-nets">' . self::net_results($mine) . '</div>'
+            . '<div class="co-tile-kpi"><div><small>Impresiones</small><b>' . self::num($views) . '</b></div><div><small>Interacciones</small><b>' . self::num($inter) . '</b></div></div>'
+            . '<details class="pt-more"><summary>Ver el texto y las cifras por red</summary>' . self::pub_detail($p, self::metrics_detail($mine)) . '</details></article>';
     }
 
     /** Filas de un mes en un bloque plegable, con su resumen en la cabecera (app.js abre y pliega con data-month-toggle). */
@@ -1341,9 +1373,11 @@ class Admin
         if (!$list['threads']) {
             $body .= '<div class="card empty">' . ($filter === 'nuevas' ? 'No hay respuestas nuevas.' : ($filter === 'pendientes' ? 'No hay respuestas sin contestar.' : 'Todavía no hay respuestas.')) . '</div>';
         }
+        $body .= $list['threads'] ? '<div class="thread-grid">' : ''; // dos lado a lado
         foreach ($list['threads'] as $thread) {
             $body .= self::thread_card($thread, $filter, $net, $draft);
         }
+        $body .= $list['threads'] ? '</div>' : '';
         if ($pages > 1) {
             $link = function ($n, $label) use ($filter, $net) {
                 return '<a class="btn btn-secondary btn-sm" href="/respuestas?' . self::h(http_build_query(array('f' => $filter, 'red' => $net, 'pag' => $n))) . '">' . $label . '</a>';
@@ -1492,9 +1526,11 @@ class Admin
         if (!$list['rows']) {
             $body .= '<div class="card empty">' . ($filter === 'nuevas' ? 'No hay menciones nuevas.' : ($filter === 'pendientes' ? 'No hay menciones sin contestar.' : 'Todavía no hay menciones.')) . '</div>';
         }
+        $body .= $list['rows'] ? '<div class="thread-grid">' : ''; // dos lado a lado
         foreach ($list['rows'] as $m) {
             $body .= self::mention_card($m, $hidden, isset($draft[(int) $m['id']]) ? $draft[(int) $m['id']] : '');
         }
+        $body .= $list['rows'] ? '</div>' : '';
         if ($pages > 1) {
             $body .= '<div class="pager">' . ($page > 1 ? '<a class="btn btn-secondary btn-sm" href="' . self::h($url($filter, $net, $page - 1)) . '">← Más recientes</a>' : '')
                 . '<span class="muted">Página ' . $page . ' de ' . $pages . '</span>'
