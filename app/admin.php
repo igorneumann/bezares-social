@@ -304,7 +304,7 @@ class Admin
     {
         return '<!doctype html><html lang="es" class="no-js"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
             . '<link rel="icon" href="/favicon.svg" type="image/svg+xml"><title>' . self::h($title) . ' · Bezares Social MKT</title>'
-            . '<link rel="stylesheet" href="/app.css?v=' . (int) @filemtime(BZS_ROOT . '/public/app.css') . '"><script src="/app.js?v=' . (int) @filemtime(BZS_ROOT . '/public/app.js') . '" defer></script></head>';
+            . '<link rel="stylesheet" href="/app.css?v=' . (int) @filemtime(BZS_ROOT . '/public/app.css') . '"><script src="/app.js?v=' . (int) @filemtime(BZS_ROOT . '/public/app.js') . '" defer></script><script src="/charts.js?v=' . (int) @filemtime(BZS_ROOT . '/public/charts.js') . '" defer></script></head>';
     }
 
     private static function layout($title, $subtitle, $body, $headActions = '')
@@ -788,6 +788,55 @@ class Admin
             . ($prevTot ? '<div class="d">antes: ' . self::pct($rateB) . ' <span class="' . ($pp > 0 ? 'good' : ($pp < 0 ? 'worse' : 'flat')) . '">' . ($pp > 0 ? '+' : '') . str_replace('.', ',', (string) $pp) . ' pp</span></div>' : '')
             . '</div></div>';
 
+        // Evolución: impresiones e interacciones por red, por día (hasta un mes), semana (hasta medio año) o mes
+        if ($pubs) {
+            $start = $from ?: min(array_map('intval', array_column($pubs, 'created_at')));
+            $days = ($to - $start) / 86400;
+            $mode = $days <= 31 ? 'day' : ($days <= 183 ? 'week' : 'month');
+            $key = function ($t) use ($mode) {
+                return $mode === 'day' ? date('Y-m-d', $t) : ($mode === 'month' ? date('Y-m', $t) : date('Y-m-d', strtotime('monday this week', $t)));
+            };
+            $mon = array('ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic');
+            $labels = array();
+            for ($t = $start; $t < $to && count($labels) < 400; $t += 86400) {
+                $k = $key($t);
+                if (!isset($labels[$k])) {
+                    $labels[$k] = $mode === 'month' ? $mon[(int) date('n', $t) - 1] . ' ' . date('y', $t) : ($mode === 'week' ? 'Sem ' . date('j/n', strtotime($k)) : date('j/n', $t));
+                }
+            }
+            $zero = array_fill_keys(array_keys($labels), 0);
+            $views = $zero;
+            $byNet = array();
+            foreach (Social::NETWORKS as $net => $l) {
+                $byNet[$net] = $zero;
+            }
+            foreach ($pubs as $pub) {
+                $k = $key((int) $pub['created_at']);
+                if (!isset($views[$k])) {
+                    continue;
+                }
+                foreach (isset($posts[$pub['id']]) ? $posts[$pub['id']] : array() as $net => $po) {
+                    if ($po['status'] === 'ok' && isset($byNet[$net])) {
+                        $views[$k] += self::views($po['m']);
+                        $byNet[$net][$k] += self::interactions($po['m']);
+                    }
+                }
+            }
+            $series = array();
+            $i = 0;
+            foreach ($byNet as $net => $v) {
+                $i++;
+                if (array_sum($v)) {
+                    $series[] = array('name' => Social::NETWORKS[$net], 'data' => array_values($v), 'color' => $i);
+                }
+            }
+            $chart = function ($type, $series, $label) use ($labels) {
+                return '<div class="chx-box" data-h="210" data-chart="' . self::h(json_encode(array('type' => $type, 'labels' => array_values($labels), 'series' => $series, 'label' => $label), JSON_UNESCAPED_UNICODE)) . '"></div>';
+            };
+            $body .= '<div class="charts-two"><div class="card"><h2>Impresiones <small class="muted">por ' . array('day' => 'día', 'week' => 'semana', 'month' => 'mes')[$mode] . '</small></h2>'
+                . (array_sum($views) ? $chart('line', array(array('name' => 'Impresiones', 'data' => array_values($views), 'color' => 1)), 'Impresiones por fecha de publicación') : '<p class="muted">Sin impresiones todavía en este periodo.</p>') . '</div>'
+                . '<div class="card"><h2>Interacciones por red</h2>' . ($series ? $chart('stack', $series, 'Interacciones por red social') : '<p class="muted">Sin interacciones todavía en este periodo.</p>') . '</div></div>';
+        }
         // Por red
         $maxViews = max(1, max(array_column($A['byNet'], 'views')), $B ? max(array_column($B['byNet'], 'views')) : 0);
         $rowsNet = '';
