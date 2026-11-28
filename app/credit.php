@@ -1,8 +1,8 @@
 <?php
 /**
- * Crédito de OpenAI: el saldo que se indica en Configuración → ChatGPT (con su fecha) menos lo gastado desde entonces.
- * OpenAI no da el saldo restante con una clave normal: con una clave de administrador (sk-admin-…) se resta el gasto
- * real de la organización (Costs API); sin ella, el estimado con los tokens de cada respuesta y los precios estándar.
+ * Gasto de OpenAI del mes (Configuración → ChatGPT). OpenAI no da el saldo restante por la API, así que se muestra
+ * lo gastado en el mes en curso y en el anterior: el gasto real de la organización con una clave de administrador
+ * (sk-admin-…, Costs API) o, sin ella, el estimado con los tokens de cada respuesta y los precios estándar.
  */
 class Credit
 {
@@ -15,6 +15,13 @@ class Credit
         'gpt-5.6-luna'  => array(0.20, 0.02, 1.20),
     );
 
+    const MONTHS = array(1 => 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre');
+
+    private static function save($k, $v)
+    {
+        Settings::set($k, $v);
+    }
+
     private static function price($model)
     {
         $model = strtolower((string) $model);
@@ -26,6 +33,21 @@ class Credit
         return null;
     }
 
+    /** Estimado guardado: mes en curso y anterior. Al cambiar de mes, el de este pasa a ser el anterior. */
+    private static function state()
+    {
+        $s = json_decode((string) Settings::get('openai_spent'), true);
+        $now = date('Y-m');
+        if (!is_array($s) || !isset($s['month'])) {
+            return array('month' => $now, 'usd' => 0.0, 'tokens' => 0, 'unknown' => 0, 'prev' => null);
+        }
+        if ($s['month'] !== $now) {
+            $prev = $s['month'] === date('Y-m', strtotime('first day of last month')) ? array('month' => $s['month'], 'usd' => (float) $s['usd'], 'unknown' => (int) $s['unknown']) : null;
+            $s = array('month' => $now, 'usd' => 0.0, 'tokens' => 0, 'unknown' => 0, 'prev' => $prev);
+        }
+        return $s;
+    }
+
     /** Suma el coste estimado de una respuesta de OpenAI (chat/completions, responses o images). Nunca falla. */
     public static function track($model, $usage)
     {
@@ -35,73 +57,62 @@ class Credit
         $in = (int) (isset($usage['prompt_tokens']) ? $usage['prompt_tokens'] : (isset($usage['input_tokens']) ? $usage['input_tokens'] : 0));
         $out = (int) (isset($usage['completion_tokens']) ? $usage['completion_tokens'] : (isset($usage['output_tokens']) ? $usage['output_tokens'] : 0));
         $cached = (int) (isset($usage['prompt_tokens_details']['cached_tokens']) ? $usage['prompt_tokens_details']['cached_tokens'] : (isset($usage['input_tokens_details']['cached_tokens']) ? $usage['input_tokens_details']['cached_tokens'] : 0));
-        $p = self::price($model);
+        if ($in + $out <= 0) {
+            return;
+        }
         try {
-            $s = self::spent_state();
+            $s = self::state();
             $s['tokens'] += $in + $out;
+            $p = self::price($model);
             if ($p) {
                 $cached = min($cached, $in);
                 $s['usd'] += (($in - $cached) * $p[0] + $cached * $p[1] + $out * $p[2]) / 1000000;
             } else {
                 $s['unknown'] = 1; // modelo sin precio conocido (por ejemplo, las imágenes): no cuenta en el estimado
             }
-            Settings::set('openai_spent', json_encode($s));
+            self::save('openai_spent', json_encode($s));
         } catch (Exception $e) {
-            error_log('Crédito de OpenAI: ' . $e->getMessage());
+            error_log('Gasto de OpenAI: ' . $e->getMessage());
         }
     }
 
-    /** Gasto estimado desde la fecha del saldo (se pone a cero al cambiar la fecha). */
-    private static function spent_state()
-    {
-        $since = (string) Settings::get('openai_credit_date');
-        $s = json_decode((string) Settings::get('openai_spent'), true);
-        if (!is_array($s) || (isset($s['since']) ? $s['since'] : '') !== $since) {
-            $s = array('since' => $since, 'usd' => 0.0, 'tokens' => 0, 'unknown' => 0);
-        }
-        return $s;
-    }
-
-    /** @return array|null [saldo, fecha, gastado, queda, 'real'|'estimado', aviso] */
+    /**
+     * Gasto de este mes y del anterior.
+     * @return array [este mes USD, mes anterior USD o null, 'real'|'estimado', aviso, tokens de este mes (solo estimado)]
+     */
     public static function status()
     {
-        $credit = (float) str_replace(',', '.', (string) Settings::get('openai_credit'));
-        $since = (string) Settings::get('openai_credit_date');
-        if ($credit <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $since)) {
-            return null;
-        }
         $note = '';
-        $spent = null;
-        $src = 'estimado';
         if ((string) Settings::get('openai_admin_key') !== '') {
             try {
-                $spent = self::real($since);
-                $src = 'real';
+                $first = strtotime(date('Y-m-01') . ' 00:00:00 UTC');
+                $prevFirst = strtotime(date('Y-m-01', strtotime('first day of last month')) . ' 00:00:00 UTC');
+                return array(self::real($first, null), self::real($prevFirst, $first), 'real', '', null);
             } catch (Exception $e) {
                 $note = $e->getMessage();
             }
         }
-        if ($spent === null) {
-            $s = self::spent_state();
-            $spent = (float) $s['usd'];
-            if (!empty($s['unknown'])) {
-                $note = 'Las imágenes y los modelos sin precio conocido no cuentan en el estimado.';
-            }
+        $s = self::state();
+        if (!empty($s['unknown']) || (!empty($s['prev']) && !empty($s['prev']['unknown']))) {
+            $note .= ($note !== '' ? ' ' : '') . 'Las imágenes y los modelos sin precio conocido no cuentan en el estimado.';
         }
-        return array($credit, $since, $spent, $credit - $spent, $src, $note);
+        return array((float) $s['usd'], !empty($s['prev']) ? (float) $s['prev']['usd'] : null, 'estimado', $note, (int) $s['tokens']);
     }
 
-    /** Gasto real de la organización desde un día (Costs API). Se guarda 15 minutos. */
-    private static function real($since)
+    /** Gasto real de la organización entre dos instantes (Costs API, clave de administrador). Se guarda 15 minutos. */
+    private static function real($start, $end)
     {
-        $c = json_decode((string) Settings::get('openai_cost_cache'), true);
-        if (is_array($c) && (isset($c['since']) ? $c['since'] : '') === $since && (int) $c['t'] > time() - 900) {
-            return (float) $c['v'];
+        $key = $start . '-' . (int) $end;
+        $cache = json_decode((string) Settings::get('openai_cost_cache'), true);
+        $cache = is_array($cache) ? $cache : array();
+        if (isset($cache[$key]) && (int) $cache[$key]['t'] > time() - ($end ? 86400 : 900)) {
+            return (float) $cache[$key]['v'];
         }
         $total = 0.0;
         $page = '';
-        for ($i = 0; $i < 10; $i++) {
-            $ch = curl_init('https://api.openai.com/v1/organization/costs?bucket_width=1d&limit=180&start_time=' . strtotime($since . ' 00:00:00 UTC') . ($page !== '' ? '&page=' . rawurlencode($page) : ''));
+        for ($i = 0; $i < 5; $i++) {
+            $url = 'https://api.openai.com/v1/organization/costs?bucket_width=1d&limit=31&start_time=' . $start . ($end ? '&end_time=' . $end : '') . ($page !== '' ? '&page=' . rawurlencode($page) : '');
+            $ch = curl_init($url);
             curl_setopt_array($ch, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15, CURLOPT_CONNECTTIMEOUT => 8, CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
                 CURLOPT_HTTPHEADER => array('Authorization: Bearer ' . Settings::get('openai_admin_key'))));
             $r = curl_exec($ch);
@@ -121,7 +132,8 @@ class Credit
                 break;
             }
         }
-        Settings::set('openai_cost_cache', json_encode(array('t' => time(), 'since' => $since, 'v' => $total)));
+        $cache = array_slice(array($key => array('t' => time(), 'v' => $total)) + $cache, 0, 4, true);
+        self::save('openai_cost_cache', json_encode($cache));
         return $total;
     }
 
@@ -130,17 +142,18 @@ class Credit
         return number_format((float) $v, 2, ',', '.') . ' $';
     }
 
-    /** Recuadro para la pestaña de ChatGPT de la configuración. $h escapa el HTML. */
+    /** Recuadro para el apartado de ChatGPT de la configuración. $h escapa el HTML. */
     public static function box($h)
     {
         $c = self::status();
-        if (!$c) {
-            return '<div class="info-box"><b>💳 Crédito disponible:</b> indica abajo el saldo de tu cuenta de OpenAI y la fecha, y aquí verás lo que te queda. '
-                . 'Lo encuentras en <a href="https://platform.openai.com/settings/organization/billing" target="_blank" rel="noopener noreferrer">platform.openai.com → Billing</a>.</div>';
-        }
-        return '<div class="info-box"><b>💳 Crédito disponible: <span style="font-size:1.25em;' . ($c[3] < 0 ? 'color:#c62828' : '') . '">' . self::usd($c[3]) . '</span></b><br>'
-            . 'Saldo de ' . self::usd($c[0]) . ' el ' . date('d/m/Y', strtotime($c[1])) . ', menos ' . self::usd($c[2]) . ' gastados desde entonces ('
-            . ($c[4] === 'real' ? 'gasto real de tu organización de OpenAI' : 'estimado con los tokens de cada respuesta; con una clave de administrador sería el gasto real') . ').'
-            . ($c[5] !== '' ? '<br><span class="muted">' . $h($c[5]) . '</span>' : '') . ' Cuando recargues saldo, cambia el saldo y la fecha.</div>';
+        $month = self::MONTHS[(int) date('n')];
+        $prev = self::MONTHS[(int) date('n', strtotime('first day of last month'))];
+        return '<div class="info-box"><b>💸 Gastado en OpenAI en ' . $month . ': <span style="font-size:1.25em">' . self::usd($c[0]) . '</span></b>'
+            . ($c[1] !== null ? ' &nbsp;·&nbsp; ' . $prev . ': ' . self::usd($c[1]) : '') . '<br>'
+            . ($c[2] === 'real'
+                ? 'Gasto real de toda tu organización de OpenAI (todas las aplicaciones que usan esa cuenta).'
+                : 'Estimado con los tokens que ha usado esta aplicación desde que se instaló esta versión' . ($c[4] ? ' (' . number_format($c[4], 0, ',', '.') . ' tokens este mes)' : '') . ' y los precios estándar de OpenAI. Con una clave de administrador sería el gasto real.')
+            . ($c[3] !== '' ? '<br><span class="muted">' . $h($c[3]) . '</span>' : '')
+            . ' El saldo está en <a href="https://platform.openai.com/settings/organization/billing" target="_blank" rel="noopener noreferrer">platform.openai.com → Billing</a>.</div>';
     }
 }

@@ -21,9 +21,7 @@ class Settings
             'openai' => array('label' => 'ChatGPT', 'icon' => '🤖', 'fields' => array(
                 array('k' => 'openai_key', 'label' => 'API key de OpenAI', 'type' => 'secret'),
                 array('k' => 'openai_model', 'label' => 'Modelo', 'type' => 'text', 'def' => 'gpt-5.6-luna', 'help' => 'Cualquier modelo de chat de tu cuenta de OpenAI (p. ej. gpt-5.6-luna, gpt-6-luna, gpt-6.2-sol).'),
-                array('k' => 'openai_credit', 'label' => 'Saldo de OpenAI (USD)', 'type' => 'text', 'help' => 'El saldo de tu cuenta en platform.openai.com → Billing. Vacío = no mostrar el crédito.'),
-                array('k' => 'openai_credit_date', 'label' => 'Fecha de ese saldo (AAAA-MM-DD)', 'type' => 'text', 'help' => 'El día en que tenías ese saldo. Desde ese día se resta lo gastado.'),
-                array('k' => 'openai_admin_key', 'label' => 'Clave de administrador de OpenAI (opcional)', 'type' => 'secret', 'help' => 'Empieza por sk-admin- (Settings → Admin keys). Con ella se resta el gasto real de la organización en vez del estimado. Solo se usa para leer el gasto.'),
+                array('k' => 'openai_admin_key', 'label' => 'Clave de administrador de OpenAI (opcional)', 'type' => 'secret', 'help' => 'Empieza por sk-admin- (Settings → Admin keys). Con ella se muestra el gasto real del mes de tu organización en vez del estimado. Solo se usa para leer el gasto.'),
                 array('k' => 'openai_spent', 'type' => 'hidden'),
                 array('k' => 'openai_cost_cache', 'type' => 'hidden'),
                 array('k' => 'prompt_post', 'label' => 'Prompt del post (LinkedIn, Facebook e Instagram)', 'type' => 'textarea', 'def' => self::DEFAULT_PROMPT_POST),
@@ -153,8 +151,6 @@ class Settings
         'ig_user_id'    => array('/^\d*$/', 'El ID de la cuenta de Instagram debe ser solo números.'),
         'image_model'   => array('/^[A-Za-z0-9._:\-]+$/', 'El nombre del modelo de imágenes solo puede tener letras, números, puntos, guiones y dos puntos.'),
         'image_logo'    => array('#^(https://\S+)?$#', 'El enlace del logo debe empezar por https://.'),
-        'openai_credit' => array('/^(\d{1,7}([.,]\d{1,2})?)?$/D', 'El saldo de OpenAI debe ser un número en dólares (por ejemplo 50 o 120,50).'),
-        'openai_credit_date' => array('/^(\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01]))?$/D', 'La fecha del saldo debe tener el formato AAAA-MM-DD (por ejemplo 2026-11-28).'),
         'openai_model'  => array('/^[A-Za-z0-9._:\-]+$/', 'El nombre del modelo solo puede tener letras, números, puntos, guiones y dos puntos.'),
     );
 
