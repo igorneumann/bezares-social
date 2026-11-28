@@ -1217,7 +1217,7 @@ class Admin
             $pager = $pages > 1 ? '<div class="pager">' . ($page > 1 ? $link($page - 1, '← Más recientes') : '') . '<span class="muted">Página ' . $page . ' de ' . $pages . '</span>' . ($page < $pages ? $link($page + 1, 'Más antiguas →') : '') . '</div>' : '';
             $head = '<div class="vbar"><h2 style="margin:0">' . ($filtered ? 'Resultados' : array('publicadas' => 'Publicadas', 'fallidas' => 'Fallidas', 'todas' => 'Todas')[$tab]) . ' <span class="badge b-role">' . $total . '</span></h2>' . $sw . '</div>';
             $body .= $vista === 'lista'
-                ? '<div class="card">' . $head . '<div class="table-wrap"><table class="pubs"><thead><tr><th>Fecha</th><th>Noticia</th><th>Redes</th><th>Impresiones</th><th>Interacciones</th></tr></thead>' . $tbodies . '</table></div>' . $pager . '</div>'
+                ? '<div class="card">' . $head . '<div class="table-wrap"><table class="pubs tbl-compact"><thead><tr><th>Fecha</th><th class="m-first">Noticia</th><th>Redes</th><th>Impresiones</th><th>Interacciones</th></tr></thead>' . $tbodies . '</table></div>' . $pager . '</div>'
                 : $head . $grid . $pager;
         }
         $months = Publisher::retention_months();
@@ -1676,7 +1676,7 @@ class Admin
         $body = self::pub_tabs('programadas') . self::cron_notice();
         $body .= '<div class="card"><h2>Pendientes <span class="badge b-role">' . count($pending) . '</span></h2>'
             . ($pending
-                ? '<div class="table-wrap"><table class="pubs sched"><thead><tr><th>Fecha</th><th>Noticia</th><th>Redes</th><th></th></tr></thead>' . $tbodies . '</table></div>'
+                ? '<div class="table-wrap"><table class="pubs sched tbl-compact"><thead><tr><th>Fecha</th><th class="m-first">Noticia</th><th>Redes</th><th></th></tr></thead>' . $tbodies . '</table></div>'
                 : '<p class="muted">No hay publicaciones programadas. En <a href="/">Publicar</a>, elige fecha y hora y pulsa «Programar».</p>')
             . '</div>';
 
@@ -1693,7 +1693,7 @@ class Admin
                     . '<td><span class="badge ' . ($p['status'] === 'published' ? 'b-on' : ($p['status'] === 'failed' ? 'b-bad' : 'b-off')) . '">' . self::h(Publisher::STATUS[$p['status']]) . '</span>'
                     . ($p['status'] === 'published' ? '<br><small class="muted">enviada el ' . date('d/m H:i', (int) $p['created_at']) . '</small>' : '') . '</td><td>' . $res . '</td></tr>';
             }
-            $body .= '<div class="card"><h2>Historial</h2><div class="table-wrap"><table class="pubs"><thead><tr><th>Programada para</th><th>Noticia</th><th>Estado</th><th>Resultado</th></tr></thead><tbody>'
+            $body .= '<div class="card"><h2>Historial</h2><div class="table-wrap"><table class="pubs tbl-compact"><thead><tr><th>Programada para</th><th class="m-first">Noticia</th><th>Estado</th><th>Resultado</th></tr></thead><tbody>'
                 . $hist . '</tbody></table></div></div>';
         }
         self::layout('Programadas', 'Publicaciones que saldrán automáticamente en la fecha elegida', $body);

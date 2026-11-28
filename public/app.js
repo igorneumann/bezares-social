@@ -432,3 +432,31 @@ document.addEventListener('click', function (e) {
   if (b) b.setAttribute('aria-expanded', 'true');
   t.scrollIntoView();
 })();
+/* Listados en el móvil (table.tbl-compact): cada fila en dos o tres líneas, con la etiqueta de cada dato en línea */
+(function () {
+  if (!window.matchMedia || !window.matchMedia('(max-width: 640px), (pointer: coarse) and (max-height: 500px)').matches) return;
+  document.querySelectorAll('table.tbl-compact').forEach(function (t) {
+    var ths = t.tHead ? Array.prototype.slice.call(t.tHead.rows[0].cells) : [];
+    var names = ths.map(function (th) { return th.textContent.trim(); });
+    var firstCol = ths.findIndex(function (th) { return th.classList.contains('m-first'); });
+    Array.prototype.forEach.call(t.tBodies, function (tb) {
+      Array.prototype.forEach.call(tb.rows, function (tr) {
+        var col = 0, done = false;
+        Array.prototype.forEach.call(tr.cells, function (td) {
+          var single = tr.cells.length === 1;
+          var name = single ? '' : (names[col] || '');
+          var i = col;
+          col += td.colSpan || 1;
+          td.setAttribute('data-label', name);
+          var empty = !td.textContent.trim() && !td.querySelector('input,select,img,svg,button,a');
+          var chk = td.querySelector('input[type=checkbox]') && !td.textContent.trim();
+          td.classList.toggle('blank', empty);
+          td.classList.toggle('chk', !!chk || td.classList.contains('chk'));
+          td.classList.toggle('nolabel', name === '' || !!chk);
+          if (single || (!done && !empty && !chk && (firstCol < 0 || i === firstCol))) { td.classList.add('first', 'nolabel'); done = true; }
+        });
+      });
+    });
+    t.classList.add('m-cmp');
+  });
+})();
