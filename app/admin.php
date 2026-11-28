@@ -1054,9 +1054,10 @@ class Admin
         };
         $q = clean_line($get('q'), 100);
         $net = isset(Social::NETWORKS[$get('red')]) ? $get('red') : '';
+        $tab = in_array($get('v'), array('fallidas', 'todas'), true) ? $get('v') : 'publicadas';
         $per = 25;
 
-        $where = "p.status IN ('published', 'failed')";
+        $where = array('publicadas' => "p.status = 'published'", 'fallidas' => "p.status = 'failed'", 'todas' => "p.status IN ('published', 'failed')")[$tab];
         $args = array();
         if ($q !== '') {
             $like = '%' . addcslashes($q, '%_\\') . '%';
@@ -1082,8 +1083,36 @@ class Admin
             }
         }
 
+        // Por meses (del día en que salió), con el resumen de todo el mes en la cabecera
+        $tbodies = '';
         $rows = '';
+        $month = null;
+        $flush = function () use (&$tbodies, &$rows, &$month, $where, $args) {
+            if ($rows === '') {
+                return;
+            }
+            $start = strtotime($month . '-01 00:00:00');
+            $ids = array_column(DB::rows('SELECT p.id FROM publications p WHERE ' . $where . ' AND p.created_at >= ? AND p.created_at < ?', array_merge($args, array($start, strtotime('+1 month', $start)))), 'id');
+            $views = 0;
+            $inter = 0;
+            if ($ids) {
+                foreach (DB::rows("SELECT metrics FROM posts WHERE status = 'ok' AND publication_id IN (" . implode(',', array_map('intval', $ids)) . ')') as $po) {
+                    $m = $po['metrics'] ? (json_decode($po['metrics'], true) ?: array()) : array();
+                    $views += self::views($m);
+                    $inter += self::interactions($m);
+                }
+            }
+            $n = count($ids);
+            $sum = ($n === 1 ? '1 publicación' : $n . ' publicaciones') . ' · ' . self::num($views) . ' impresiones · ' . self::num($inter) . ' interacciones';
+            $tbodies .= self::month_group(self::month_label($month), $sum, $tbodies === '', 5, $rows);
+            $rows = '';
+        };
         foreach ($pubs as $p) {
+            $ym = date('Y-m', (int) $p['created_at']);
+            if ($ym !== $month) {
+                $flush();
+                $month = $ym;
+            }
             $mine = isset($posts[$p['id']]) ? $posts[$p['id']] : array();
             $views = 0;
             $inter = 0;
@@ -1099,26 +1128,30 @@ class Admin
                 . '<td>' . self::net_results($mine) . '</td>'
                 . '<td>' . self::num($views) . '</td><td class="total">' . self::num($inter) . '</td></tr>';
         }
+        $flush();
 
         $opts = '<option value="">Todas las redes</option>';
         foreach (Social::NETWORKS as $k => $l) {
             $opts .= '<option value="' . $k . '"' . ($k === $net ? ' selected' : '') . '>' . self::h($l) . '</option>';
         }
         $filtered = $q !== '' || $net !== '';
-        $body = '<form method="get" action="/publicaciones" class="card stat-bar">'
+        $vq = $tab === 'publicadas' ? array() : array('v' => $tab);
+        $body = self::pub_tabs($tab) . '<form method="get" action="/publicaciones" class="card stat-bar">'
+            . ($vq ? '<input type="hidden" name="v" value="' . self::h($tab) . '">' : '')
             . '<div class="field grow"><label for="q">Buscar</label><input id="q" type="text" name="q" value="' . self::h($q) . '" placeholder="Título, texto o enlace"></div>'
             . '<div class="field"><label for="red">Red</label><select id="red" name="red">' . $opts . '</select></div>'
             . '<button class="btn btn-secondary">Buscar</button>'
-            . ($filtered ? '<a class="btn btn-ghost" href="/publicaciones">Quitar filtros</a>' : '') . '</form>';
+            . ($filtered ? '<a class="btn btn-ghost" href="/publicaciones' . ($vq ? '?' . self::h(http_build_query($vq)) : '') . '">Quitar filtros</a>' : '') . '</form>';
 
         if (!$pubs) {
-            $body .= '<div class="card empty">' . ($filtered ? 'Ninguna publicación coincide con la búsqueda.' : 'Todavía no hay publicaciones. <a href="/">Publica la primera</a>.') . '</div>';
+            $body .= '<div class="card empty">' . ($filtered ? 'Ninguna publicación coincide con la búsqueda.'
+                : ($tab === 'fallidas' ? 'No hay publicaciones fallidas.' : 'Todavía no hay publicaciones. <a href="/">Publica la primera</a>.')) . '</div>';
         } else {
-            $link = function ($n, $label) use ($q, $net) {
-                return '<a class="btn btn-secondary btn-sm" href="/publicaciones?' . self::h(http_build_query(array('q' => $q, 'red' => $net, 'pag' => $n))) . '">' . $label . '</a>';
+            $link = function ($n, $label) use ($q, $net, $vq) {
+                return '<a class="btn btn-secondary btn-sm" href="/publicaciones?' . self::h(http_build_query($vq + array('q' => $q, 'red' => $net, 'pag' => $n))) . '">' . $label . '</a>';
             };
-            $body .= '<div class="card"><h2>' . ($filtered ? 'Resultados' : 'Todas') . ' <span class="badge b-role">' . $total . '</span></h2>'
-                . '<div class="table-wrap"><table class="pubs"><thead><tr><th>Fecha</th><th>Noticia</th><th>Redes</th><th>Impresiones</th><th>Interacciones</th></tr></thead><tbody>' . $rows . '</tbody></table></div>'
+            $body .= '<div class="card"><h2>' . ($filtered ? 'Resultados' : array('publicadas' => 'Publicadas', 'fallidas' => 'Fallidas', 'todas' => 'Todas')[$tab]) . ' <span class="badge b-role">' . $total . '</span></h2>'
+                . '<div class="table-wrap"><table class="pubs"><thead><tr><th>Fecha</th><th>Noticia</th><th>Redes</th><th>Impresiones</th><th>Interacciones</th></tr></thead>' . $tbodies . '</table></div>'
                 . ($pages > 1 ? '<div class="pager">' . ($page > 1 ? $link($page - 1, '← Más recientes') : '') . '<span class="muted">Página ' . $page . ' de ' . $pages . '</span>' . ($page < $pages ? $link($page + 1, 'Más antiguas →') : '') . '</div>' : '')
                 . '</div>';
         }
@@ -1126,6 +1159,43 @@ class Admin
         $body .= '<p class="muted">' . ($months ? 'Las publicaciones se guardan ' . $months . ($months === 1 ? ' mes' : ' meses') . '; después se borran del panel (no de las redes).' : 'Las publicaciones se guardan siempre.')
             . (Auth::is_admin(self::me()) ? ' <a href="/configuracion?tab=general">Cambiar</a>' : '') . '</p>';
         self::layout('Publicaciones', 'Todas las publicaciones anteriores', $body);
+    }
+
+    /** Pestañas comunes de Programadas y Publicaciones, con su contador. */
+    private static function pub_tabs($active)
+    {
+        $n = array();
+        foreach (DB::rows('SELECT status, COUNT(*) AS n FROM publications GROUP BY status') as $r) {
+            $n[$r['status']] = (int) $r['n'];
+        }
+        $pending = (int) DB::val("SELECT COUNT(*) FROM publications WHERE scheduled_at > 0 AND status IN ('scheduled', 'processing')");
+        $tabs = array(
+            'programadas' => array('Programadas', '/programadas', $pending),
+            'publicadas'  => array('Publicadas', '/publicaciones', $n['published'] ?? 0),
+            'fallidas'    => array('Fallidas', '/publicaciones?v=fallidas', $n['failed'] ?? 0),
+            'todas'       => array('Todas', '/publicaciones?v=todas', ($n['published'] ?? 0) + ($n['failed'] ?? 0)),
+        );
+        $o = '<div class="tabs">';
+        foreach ($tabs as $k => $t) {
+            $o .= '<a class="btn' . ($k === $active ? ' on' : '') . '" href="' . self::h($t[1]) . '"' . ($k === $active ? ' aria-current="page"' : '') . '>' . $t[0] . ' <span class="badge b-off">' . $t[2] . '</span></a>';
+        }
+        return $o . '</div>';
+    }
+
+    /** «Noviembre 2026» a partir de «2026-11». */
+    private static function month_label($ym)
+    {
+        $m = array('', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre');
+        $p = explode('-', (string) $ym);
+        return isset($p[1], $m[(int) $p[1]]) && (int) $p[1] ? $m[(int) $p[1]] . ' ' . $p[0] : 'Sin fecha';
+    }
+
+    /** Filas de un mes en un bloque plegable, con su resumen en la cabecera (app.js abre y pliega con data-month-toggle). */
+    private static function month_group($label, $summary, $open, $cols, $rows)
+    {
+        return '<tbody class="mgroup' . ($open ? '' : ' closed') . '"><tr class="mhead"><td colspan="' . (int) $cols . '">'
+            . '<button type="button" aria-expanded="' . ($open ? 'true' : 'false') . '" data-month-toggle><span class="chev" aria-hidden="true"></span>'
+            . '<b>' . self::h($label) . '</b><span class="muted">' . self::h($summary) . '</span></button></td></tr>' . $rows . '</tbody>';
     }
 
     /* ================================================================ RESPUESTAS */
@@ -1462,16 +1532,22 @@ class Admin
 
         // Pendientes
         $pending = DB::rows("SELECT * FROM publications WHERE scheduled_at > 0 AND status IN ('scheduled', 'processing') ORDER BY scheduled_at ASC");
-        $rows = '';
+        // Agrupadas hacia delante: esta semana (y las atrasadas) y después cada mes
+        $rows = array();
+        $cnt = array();
+        $weekEnd = strtotime('monday next week 00:00');
         foreach ($pending as $p) {
             $ts = (int) $p['scheduled_at'];
             $late = $p['status'] === 'scheduled' && $ts < time();
+            $bk = $ts < $weekEnd ? 'week' : date('Y-m', $ts);
+            $rows[$bk] = $rows[$bk] ?? '';
+            $cnt[$bk] = ($cnt[$bk] ?? 0) + 1;
             $form = function ($action, $label, $class, $extra = '', $confirm = '') use ($p) {
                 return '<form method="post" action="/programadas" class="inline sched-form" data-busy-form>' . self::csrf_field() . '<input type="hidden" name="id" value="' . (int) $p['id'] . '">'
                     . $extra . '<button class="btn btn-sm ' . $class . '" name="action" value="' . $action . '"'
                     . ($confirm ? ' data-confirm="' . self::h($confirm) . '"' : '') . ($action === 'now' ? ' data-busy="Publicando en las redes sociales…"' : '') . '>' . $label . '</button></form>';
             };
-            $rows .= '<tr' . ($late ? ' class="late"' : '') . '><td class="nowrap"><b>' . date('d/m/Y', $ts) . '</b><br>' . date('H:i', $ts)
+            $rows[$bk] .= '<tr' . ($late ? ' class="late"' : '') . '><td class="nowrap"><b>' . date('d/m/Y', $ts) . '</b><br>' . date('H:i', $ts)
                 . '<br><small class="muted">' . self::h(self::until($ts)) . '</small></td>'
                 . '<td class="pub-title">' . self::pub_detail($p) . '<small class="muted">Programada por ' . self::h(isset($users[$p['user_id']]) ? $users[$p['user_id']] : '—') . '</small></td>'
                 . '<td>' . $nets($p['networks']) . '</td>'
@@ -1483,10 +1559,15 @@ class Admin
                 . '</td></tr>';
         }
 
-        $body = self::cron_notice();
+        $tbodies = '';
+        foreach ($rows as $bk => $r) {
+            $n = $cnt[$bk];
+            $tbodies .= self::month_group($bk === 'week' ? 'Esta semana' : self::month_label($bk), $n === 1 ? '1 publicación' : $n . ' publicaciones', true, 4, $r);
+        }
+        $body = self::pub_tabs('programadas') . self::cron_notice();
         $body .= '<div class="card"><h2>Pendientes <span class="badge b-role">' . count($pending) . '</span></h2>'
             . ($pending
-                ? '<div class="table-wrap"><table class="pubs sched"><thead><tr><th>Fecha</th><th>Noticia</th><th>Redes</th><th></th></tr></thead><tbody>' . $rows . '</tbody></table></div>'
+                ? '<div class="table-wrap"><table class="pubs sched"><thead><tr><th>Fecha</th><th>Noticia</th><th>Redes</th><th></th></tr></thead>' . $tbodies . '</table></div>'
                 : '<p class="muted">No hay publicaciones programadas. En <a href="/">Publicar</a>, elige fecha y hora y pulsa «Programar».</p>')
             . '</div>';
 

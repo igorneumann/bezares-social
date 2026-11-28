@@ -302,3 +302,12 @@ input[type=number]{max-width:140px}
 
 /* Versión del programa, esquina inferior derecha */
 .app-version{position:fixed;right:10px;bottom:6px;z-index:5;font-size:12px;color:var(--muted);pointer-events:none;user-select:none}
+
+/* Listados archivados por mes (Chats, Publicaciones): cabecera plegable de cada mes */
+tr.mhead td{background:rgba(127,140,155,.08);padding:0!important}
+tr.mhead button{all:unset;box-sizing:border-box;display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;width:100%;padding:10px 14px;cursor:pointer;font-size:14px;color:var(--text)}
+tr.mhead button:focus-visible{outline:2px solid var(--brand);outline-offset:-2px}
+tr.mhead .muted{margin-left:auto;font-size:13px}
+tr.mhead .chev{width:7px;height:7px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);margin:0 3px 3px;flex:none}
+tbody.mgroup.closed .chev{transform:rotate(-45deg);margin-bottom:0}
+tbody.mgroup.closed tr:not(.mhead){display:none!important}
