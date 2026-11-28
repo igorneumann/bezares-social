@@ -93,6 +93,7 @@ class ImageGen
             throw new AppError('ChatGPT (imagen): ' . Http::err($r)
                 . ($r['status'] === 403 ? ' — Puede que OpenAI pida verificar la organización para usar sus modelos de imagen (platform.openai.com → Settings → Organization).' : ''));
         }
+        Credit::track(Settings::get('image_model') ?: Settings::DEFAULT_IMAGE_MODEL, isset($r['json']['usage']) ? $r['json']['usage'] : null);
         return self::save(base64_decode((string) $r['json']['data'][0]['b64_json'], true));
     }
 

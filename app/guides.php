@@ -47,7 +47,7 @@ class Guides
             . '<li>En <b>Settings → Billing</b>, comprueba que hay saldo o un método de pago. La API se factura aparte de la suscripción a ChatGPT Plus/Team.</li>'
             . '<li>Ve a ' . self::a('https://platform.openai.com/api-keys', 'API keys') . ' y pulsa <b>Create new secret key</b>. Ponle de nombre «Bezares Social» y deja los permisos en <i>All</i>.</li>'
             . '<li>Copia la clave (empieza por <code>sk-</code>). <b>Solo se muestra una vez.</b> Pégala en «API key de OpenAI» y pulsa <b>Guardar y probar conexión</b>.</li>'
-            . '<li><b>Modelo</b>: <code>gpt-4o-mini</code> es económico y suficiente para posts. Puedes poner otro modelo de tu cuenta si quieres más calidad.</li>'
+            . '<li><b>Modelo</b>: <code>gpt-5.6-luna</code> es económico y suficiente para posts. Puedes poner otro modelo de tu cuenta si quieres más calidad.</li>'
             . '<li><b>Imágenes</b>: el botón «Generar imagen» usa la misma clave. OpenAI puede pedir <b>verificar la organización</b> (Settings → Organization) para sus modelos de imagen. Cada imagen tiene un coste aparte.</li>'
             . '<li>Los <b>prompts</b> se pueden editar aquí mismo. El texto de la noticia se añade solo detrás del prompt.</li></ol>';
     }

@@ -19,8 +19,9 @@ class AI
         if ($key === '') {
             throw new AppError('Falta la API key de OpenAI (Configuración → ChatGPT).');
         }
+        $model = Settings::get('openai_model') ?: 'gpt-5.6-luna';
         $r = Http::json('POST', 'https://api.openai.com/v1/chat/completions', array(
-            'model'    => Settings::get('openai_model') ?: 'gpt-4o-mini',
+            'model'    => $model,
             'messages' => array(
                 array('role' => 'system', 'content' => self::SYSTEM),
                 array('role' => 'user', 'content' => $content),
@@ -30,6 +31,7 @@ class AI
         if ($r['status'] !== 200 || !isset($r['json']['choices'][0]['message']['content'])) {
             throw new AppError('ChatGPT: ' . Http::err($r));
         }
+        Credit::track($model, isset($r['json']['usage']) ? $r['json']['usage'] : null);
         $text = trim((string) $r['json']['choices'][0]['message']['content']);
         // Quita comillas envolventes si el modelo las añade.
         if (preg_match('/^["“«](.*)["”»]$/su', $text, $m)) {
@@ -152,7 +154,7 @@ class AI
     /** Prueba la clave listando el modelo configurado. */
     public static function test()
     {
-        $model = Settings::get('openai_model') ?: 'gpt-4o-mini';
+        $model = Settings::get('openai_model') ?: 'gpt-5.6-luna';
         $r = Http::request('GET', 'https://api.openai.com/v1/models/' . rawurlencode($model), array('Authorization' => 'Bearer ' . Settings::get('openai_key')), null, 20);
         if ($r['status'] !== 200) {
             throw new AppError(Http::err($r));

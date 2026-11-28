@@ -24,6 +24,7 @@ require __DIR__ . '/settings.php';
 require __DIR__ . '/auth.php';
 require __DIR__ . '/posttext.php';
 require __DIR__ . '/ai.php';
+require __DIR__ . '/credit.php';
 require __DIR__ . '/news.php';
 require __DIR__ . '/social.php';
 require __DIR__ . '/publisher.php';

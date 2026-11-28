@@ -1823,6 +1823,10 @@ class Admin
                 . '</div>';
         }
 
+        if ($svc === 'openai') {
+            $extra = Credit::box(function ($s) { return self::h($s); });
+        }
+
         if ($svc === 'instagram') {
             $extra = '<div class="info-box"><b>@Menciones de Instagram (opcional).</b> Instagram solo las avisa por webhook. Los pasos están en «Cómo conseguir las claves», apartado 3: en el caso de uso de Instagram de la app de Meta, suscríbete al campo <code>mentions</code> con:'
                 . '<br>Callback URL: <code>' . self::h(Mentions::webhook_url()) . '</code><br>Verify token: <code>' . self::h(Mentions::verify_token()) . '</code>'
