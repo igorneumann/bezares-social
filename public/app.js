@@ -422,3 +422,13 @@ document.addEventListener('click', function (e) {
   g.classList.toggle('closed');
   b.setAttribute('aria-expanded', String(!g.classList.contains('closed')));
 });
+// Al volver a una respuesta o mención concreta (#c12, #m5), abrir su mes aunque esté plegado
+(function () {
+  var t = location.hash && document.getElementById(location.hash.slice(1));
+  var g = t && t.closest && t.closest('.mgroup.closed');
+  if (!g) return;
+  g.classList.remove('closed');
+  var b = g.querySelector('[data-month-toggle]');
+  if (b) b.setAttribute('aria-expanded', 'true');
+  t.scrollIntoView();
+})();

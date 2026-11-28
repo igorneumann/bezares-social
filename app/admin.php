@@ -1248,6 +1248,23 @@ class Admin
     }
 
     /** «Noviembre 2026» a partir de «2026-11». */
+    /** Tarjetas agrupadas por mes, dos lado a lado; solo el mes actual abierto. $items: [[AAAA-MM, html], …] en orden. */
+    private static function month_cards(array $items, $one, $many)
+    {
+        $by = array();
+        foreach ($items as $it) {
+            $by[$it[0]][] = $it[1];
+        }
+        $o = '';
+        foreach ($by as $ym => $list) {
+            $open = $ym === date('Y-m');
+            $n = count($list);
+            $o .= '<section class="mgroup mgrid' . ($open ? '' : ' closed') . '"><div class="mhead"><button type="button" aria-expanded="' . ($open ? 'true' : 'false') . '" data-month-toggle><span class="chev" aria-hidden="true"></span>'
+                . '<b>' . self::h(self::month_label($ym)) . '</b><span class="muted">' . $n . ' ' . ($n === 1 ? $one : $many) . '</span></button></div><div class="thread-grid">' . implode('', $list) . '</div></section>';
+        }
+        return $o;
+    }
+
     private static function month_label($ym)
     {
         $m = array('', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre');
@@ -1373,11 +1390,16 @@ class Admin
         if (!$list['threads']) {
             $body .= '<div class="card empty">' . ($filter === 'nuevas' ? 'No hay respuestas nuevas.' : ($filter === 'pendientes' ? 'No hay respuestas sin contestar.' : 'Todavía no hay respuestas.')) . '</div>';
         }
-        $body .= $list['threads'] ? '<div class="thread-grid">' : ''; // dos lado a lado
+        // Por meses (del último comentario de cada hilo), dos lado a lado; solo el mes actual abierto
+        $items = array();
         foreach ($list['threads'] as $thread) {
-            $body .= self::thread_card($thread, $filter, $net, $draft);
+            $last = 0;
+            foreach ($thread as $c) {
+                $last = max($last, (int) $c['created_at'] > 0 ? (int) $c['created_at'] : (int) $c['first_seen']);
+            }
+            $items[] = array(date('Y-m', $last ?: time()), self::thread_card($thread, $filter, $net, $draft));
         }
-        $body .= $list['threads'] ? '</div>' : '';
+        $body .= self::month_cards($items, 'conversación', 'conversaciones');
         if ($pages > 1) {
             $link = function ($n, $label) use ($filter, $net) {
                 return '<a class="btn btn-secondary btn-sm" href="/respuestas?' . self::h(http_build_query(array('f' => $filter, 'red' => $net, 'pag' => $n))) . '">' . $label . '</a>';
@@ -1526,11 +1548,13 @@ class Admin
         if (!$list['rows']) {
             $body .= '<div class="card empty">' . ($filter === 'nuevas' ? 'No hay menciones nuevas.' : ($filter === 'pendientes' ? 'No hay menciones sin contestar.' : 'Todavía no hay menciones.')) . '</div>';
         }
-        $body .= $list['rows'] ? '<div class="thread-grid">' : ''; // dos lado a lado
+        // Por meses, dos lado a lado; solo el mes actual abierto
+        $items = array();
         foreach ($list['rows'] as $m) {
-            $body .= self::mention_card($m, $hidden, isset($draft[(int) $m['id']]) ? $draft[(int) $m['id']] : '');
+            $t = (int) $m['created_at'] > 0 ? (int) $m['created_at'] : (int) $m['first_seen'];
+            $items[] = array(date('Y-m', $t ?: time()), self::mention_card($m, $hidden, isset($draft[(int) $m['id']]) ? $draft[(int) $m['id']] : ''));
         }
-        $body .= $list['rows'] ? '</div>' : '';
+        $body .= self::month_cards($items, 'mención', 'menciones');
         if ($pages > 1) {
             $body .= '<div class="pager">' . ($page > 1 ? '<a class="btn btn-secondary btn-sm" href="' . self::h($url($filter, $net, $page - 1)) . '">← Más recientes</a>' : '')
                 . '<span class="muted">Página ' . $page . ' de ' . $pages . '</span>'

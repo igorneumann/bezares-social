@@ -354,3 +354,4 @@ tbody.mgroup.closed tr:not(.mhead){display:none!important}
 @media (max-width:1000px){.thread-grid{grid-template-columns:1fr}}
 /* Los meses de las fichas usan .mgrid como en el resto del panel; aquí .mgrid es también la rejilla de cifras: el mes va en bloque */
 section.mgroup.mgrid{display:block}
+.mgrid.closed>.thread-grid{display:none}.mgroup>.thread-grid{margin-top:4px}
